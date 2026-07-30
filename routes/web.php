@@ -8,7 +8,9 @@ use App\Http\Controllers\AttendanceReportController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Livewire\Dashboard;
 use Livewire\Volt\Volt;
-Route::view('/', 'welcome')
+Route::get('/', fn () => auth()->check()
+    ? redirect()->route('dashboard')
+    : redirect()->route('login'))
     ->name('home');
 
 Route::get('/attendance/qr/{token}/start', function (

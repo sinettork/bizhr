@@ -73,7 +73,7 @@
             >
                 <p class="text-sm text-zinc-500">រង់ចាំអ្នកគ្រប់គ្រង</p>
                 <p class="mt-2 text-3xl font-semibold text-amber-600">
-                    {{ number_format($statistics['pending']) }}
+                    {{ number_format($statistics['pending'] ?? 0) }}
                 </p>
             </div>
 
@@ -82,7 +82,7 @@
             >
                 <p class="text-sm text-zinc-500">រង់ចាំ HR</p>
                 <p class="mt-2 text-3xl font-semibold text-blue-600">
-                    {{ number_format($statistics['manager_approved']) }}
+                    {{ number_format($statistics['manager_approved'] ?? 0) }}
                 </p>
             </div>
 
@@ -91,7 +91,7 @@
             >
                 <p class="text-sm text-zinc-500">អនុម័តថ្ងៃនេះ</p>
                 <p class="mt-2 text-3xl font-semibold text-green-600">
-                    {{ number_format($statistics['approved_today']) }}
+                    {{ number_format($statistics['approved_today'] ?? 0) }}
                 </p>
             </div>
 
@@ -100,7 +100,7 @@
             >
                 <p class="text-sm text-zinc-500">បដិសេធថ្ងៃនេះ</p>
                 <p class="mt-2 text-3xl font-semibold text-red-600">
-                    {{ number_format($statistics['rejected_today']) }}
+                    {{ number_format($statistics['rejected_today'] ?? 0) }}
                 </p>
             </div>
         </div>

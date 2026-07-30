@@ -22,3 +22,7 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+/cloudflared-error.log
+/cloudflared-output.log
+/database/database-before-*.sqlite
+/storage/app/production-audit/

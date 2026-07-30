@@ -51,9 +51,11 @@
             </div>
         </form>
 
-        <div class="space-x-1 text-sm text-center rtl:space-x-reverse text-zinc-600 dark:text-zinc-400">
-            <span>{{ __('មិនទាន់មានគណនី?') }}</span>
-            <flux:link :href="route('register')" wire:navigate>{{ __('បង្កើតគណនី') }}</flux:link>
-        </div>
+        @if (Route::has('register'))
+            <div class="space-x-1 text-sm text-center rtl:space-x-reverse text-zinc-600 dark:text-zinc-400">
+                <span>{{ __('មិនទាន់មានគណនី?') }}</span>
+                <flux:link :href="route('register')" wire:navigate>{{ __('បង្កើតគណនី') }}</flux:link>
+            </div>
+        @endif
     </div>
 </x-layouts::auth>

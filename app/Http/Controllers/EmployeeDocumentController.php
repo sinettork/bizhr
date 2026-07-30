@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use App\Models\User;
+use App\Models\AuditLog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -15,6 +16,9 @@ class EmployeeDocumentController extends Controller
     public function index(Employee $employee): View
     {
         $this->authorizeEmployee($employee);
+        AuditLog::record($employee, 'viewed_documents', [], [
+            'document_count' => $employee->documents()->count(),
+        ]);
 
         return view('employees.documents', [
             'employee' => $employee,
@@ -52,6 +56,11 @@ class EmployeeDocumentController extends Controller
         $this->authorizeEmployee($employee);
         abort_unless($document->employee_id === $employee->id, 404);
         abort_unless(Storage::disk('local')->exists($document->file_path), 404);
+        AuditLog::record($document, 'downloaded', [], [
+            'employee_id' => $employee->id,
+            'document_type' => $document->document_type,
+            'original_name' => $document->original_name,
+        ]);
 
         return Storage::disk('local')->download($document->file_path, $document->original_name);
     }

@@ -4,11 +4,14 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Fortify;
 
 class FortifyServiceProvider extends ServiceProvider
@@ -27,8 +30,41 @@ class FortifyServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureActions();
+        $this->configureAuthentication();
         $this->configureViews();
         $this->configureRateLimiting();
+    }
+
+    /**
+     * Authenticate only valid accounts and active linked employees.
+     */
+    private function configureAuthentication(): void
+    {
+        Fortify::authenticateUsing(function (Request $request): ?User {
+            $email = Str::lower(trim((string) $request->input(Fortify::username())));
+            $user = User::query()
+                ->with('employee:id,user_id,is_active,employment_status')
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->first();
+
+            if (! $user || ! Hash::check((string) $request->input('password'), $user->password)) {
+                return null;
+            }
+
+            $employee = $user->employee;
+            $accountIsInactive = ! (bool) $user->is_active;
+            $employeeIsInactive = $employee !== null
+                && (! (bool) $employee->is_active
+                    || Str::lower((string) $employee->employment_status) !== 'active');
+
+            if ($accountIsInactive || $employeeIsInactive) {
+                throw ValidationException::withMessages([
+                    Fortify::username() => 'គណនីបុគ្គលិកនេះត្រូវបានបិទ។ សូមទាក់ទងផ្នែកធនធានមនុស្ស។',
+                ]);
+            }
+
+            return $user;
+        });
     }
 
     /**

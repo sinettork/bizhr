@@ -113,13 +113,6 @@
             $attendanceAllowed,
         ),
         $menuItem(
-            'ស្កេន QR វត្តមាន',
-            'qr-code',
-            'attendance.scan',
-            'attendance.scan',
-            $attendanceAllowed,
-        ),
-        $menuItem(
             'បង្ហាញ QR វត្តមាន',
             'device-phone-mobile',
             'attendance.qr.display',

@@ -1,24 +1,31 @@
 <?php
 
 use App\Models\Employee;
+use App\Models\AuditLog;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
 new #[Title('ព័ត៌មានលម្អិតបុគ្គលិក')] class extends Component
 {
     public Employee $employee;
+    public bool $canViewSensitive = false;
 
     public function mount(Employee $employee): void
     {
         $user = auth()->user();
 
+        $isOwnRecord = $employee->user_id === auth()->id();
         $canView = $user?->can('employee.view')
             || (
                 $user?->can('employee.view-own')
-                && $employee->user_id === auth()->id()
+                && $isOwnRecord
             );
 
         abort_unless($canView, 403);
+
+        $this->canViewSensitive = $isOwnRecord
+            ? (bool) $user?->can('employee.view-own')
+            : (bool) $user?->can('employee.view-sensitive');
 
         $this->employee = $employee
             ->load([
@@ -33,6 +40,20 @@ new #[Title('ព័ត៌មានលម្អិតបុគ្គលិក')] 
                 'documents',
                 'employmentHistories',
             ]);
+
+        if ($this->canViewSensitive) {
+            AuditLog::record($this->employee, 'viewed_sensitive_profile', [], [
+                'fields' => [
+                    'base_salary',
+                    'salary_currency',
+                    'payment_method',
+                    'bank_details',
+                    'contact_details',
+                    'emergency_contact',
+                ],
+                'own_record' => $isOwnRecord,
+            ]);
+        }
     }
 };
 ?>
@@ -598,6 +619,7 @@ new #[Title('ព័ត៌មានលម្អិតបុគ្គលិក')] 
                 </dl>
             </section>
 
+            @if ($canViewSensitive)
             {{-- Contract and salary --}}
             <section
                 class="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 sm:p-6"
@@ -728,10 +750,12 @@ new #[Title('ព័ត៌មានលម្អិតបុគ្គលិក')] 
                     </div>
                 </dl>
             </section>
+            @endif
         </div>
 
         {{-- Right column --}}
         <div class="space-y-6">
+            @if ($canViewSensitive)
             {{-- Contact --}}
             <section
                 class="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900"
@@ -861,6 +885,7 @@ new #[Title('ព័ត៌មានលម្អិតបុគ្គលិក')] 
                     </div>
                 </dl>
             </section>
+            @endif
 
             {{-- Account --}}
             <section
