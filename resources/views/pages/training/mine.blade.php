@@ -1,0 +1,8 @@
+<?php
+use App\Models\TrainingEnrollment; use Livewire\Attributes\Computed; use Livewire\Attributes\Title; use Livewire\Component;
+new #[Title('វគ្គរបស់ខ្ញុំ')] class extends Component {
+ public array $progress=[];
+ #[Computed] public function items(){return TrainingEnrollment::with('course')->where('employee_id',auth()->user()->employee?->id??0)->latest()->get();}
+ public function updateProgress(int $id):void{$x=TrainingEnrollment::where('employee_id',auth()->user()->employee?->id??0)->findOrFail($id);$p=(int)($this->progress[$id]??$x->progress);if($p<0||$p>100){$this->addError("progress.$id",'វឌ្ឍនភាពត្រូវនៅចន្លោះ 0–100។');return;}$x->update(['progress'=>$p,'status'=>$p===100?'completed':($p>0?'in_progress':'assigned'),'started_at'=>$p>0?($x->started_at??now()):null,'completed_at'=>$p===100?now():null]);unset($this->items);}
+}; ?>
+<div class="space-y-6"><div><flux:heading size="xl">វគ្គរបស់ខ្ញុំ</flux:heading><flux:subheading>វគ្គបណ្តុះបណ្តាលដែលបានផ្តល់ឱ្យអ្នក</flux:subheading></div><div class="grid gap-4 lg:grid-cols-2">@forelse($this->items as $x)<div class="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900"><div class="flex justify-between"><flux:heading>{{$x->course->title}}</flux:heading><flux:badge>{{$x->status}}</flux:badge></div><p class="my-3 text-sm text-zinc-500">{{$x->course->description}}</p><div class="flex items-end gap-3"><flux:input wire:model="progress.{{$x->id}}" type="number" min="0" max="100" label="វឌ្ឍនភាព (%)" placeholder="{{$x->progress}}"/><flux:button wire:click="updateProgress({{$x->id}})">ធ្វើបច្ចុប្បន្នភាព</flux:button></div></div>@empty<div class="text-zinc-500">មិនមានវគ្គបណ្តុះបណ្តាល។</div>@endforelse</div></div>

@@ -4,7 +4,7 @@ use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\EmployeeSchedule;
 use App\Models\WorkShift;
-use Illuminate\Support\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -513,8 +513,8 @@ new #[Title('កត់ត្រាវត្តមាន')] class extends Compone
     */
 
     private function calculateLateMinutes(
-        Carbon $checkIn,
-        Carbon $workDate,
+        CarbonInterface $checkIn,
+        CarbonInterface $workDate,
         ?WorkShift $shift
     ): int {
         if (! $shift) {
@@ -552,7 +552,7 @@ new #[Title('កត់ត្រាវត្តមាន')] class extends Compone
 
     private function calculateEarlyLeaveMinutes(
         Attendance $attendance,
-        Carbon $checkOut,
+        CarbonInterface $checkOut,
         ?WorkShift $shift
     ): int {
         $scheduledEnd =
@@ -586,7 +586,7 @@ new #[Title('កត់ត្រាវត្តមាន')] class extends Compone
                     $startAt
                 )
             ) {
-                $endAt->addDay();
+                $endAt = $endAt->addDay();
             }
         }
 
@@ -617,7 +617,7 @@ new #[Title('កត់ត្រាវត្តមាន')] class extends Compone
 
     private function calculateWorkedMinutes(
         Attendance $attendance,
-        Carbon $checkOut,
+        CarbonInterface $checkOut,
         ?WorkShift $shift
     ): int {
         if (! $attendance->check_in_at) {
@@ -675,7 +675,7 @@ new #[Title('កត់ត្រាវត្តមាន')] class extends Compone
                 $startAt
             )
         ) {
-            $endAt->addDay();
+            $endAt = $endAt->addDay();
         }
 
         $minutes = (int) $startAt
@@ -692,9 +692,9 @@ new #[Title('កត់ត្រាវត្តមាន')] class extends Compone
     }
 
     private function dateWithTime(
-        Carbon $date,
+        CarbonInterface $date,
         string $time
-    ): Carbon {
+    ): CarbonInterface {
         return $date
             ->copy()
             ->setTimeFromTimeString(

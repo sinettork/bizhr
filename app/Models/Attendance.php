@@ -29,6 +29,25 @@ class Attendance extends Model
         'status',
         'notes',
         'approved_by',
+        'check_in_method',
+        'check_out_method',
+
+        'check_in_latitude',
+        'check_in_longitude',
+        'check_out_latitude',
+        'check_out_longitude',
+
+        'check_in_distance',
+        'check_out_distance',
+
+        'check_in_ip',
+        'check_out_ip',
+
+        'check_in_user_agent',
+        'check_out_user_agent',
+
+        'check_in_qr_token',
+        'check_out_qr_token',
     ];
 
     protected $casts = [
@@ -36,6 +55,23 @@ class Attendance extends Model
         'check_in_at' => 'datetime',
         'check_out_at' => 'datetime',
     ];
+    protected function casts(): array
+{
+    return [
+        'attendance_date' => 'date',
+
+        'check_in_at' => 'datetime',
+        'check_out_at' => 'datetime',
+
+        'check_in_latitude' => 'decimal:7',
+        'check_in_longitude' => 'decimal:7',
+        'check_out_latitude' => 'decimal:7',
+        'check_out_longitude' => 'decimal:7',
+
+        'check_in_distance' => 'integer',
+        'check_out_distance' => 'integer',
+    ];
+}
 
     protected static function booted(): void
     {

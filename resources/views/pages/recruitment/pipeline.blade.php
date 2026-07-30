@@ -1,0 +1,29 @@
+<?php
+use App\Models\JobApplicant;
+use App\Models\JobVacancy;
+use App\Services\RecruitmentWorkflowService;
+use Illuminate\Validation\Rule;
+use Livewire\Attributes\Computed;
+use Livewire\Attributes\Title;
+use Livewire\Component;
+use Livewire\WithPagination;
+
+new #[Title('ជ្រើសរើសបុគ្គលិក')] class extends Component {
+    use WithPagination;
+    public bool $showVacancy=false; public string $title=''; public string $description=''; public int $openings=1;
+    public string $openDate=''; public string $closeDate=''; public string $search=''; public string $status='';
+    public array $nextStatus=[]; public array $notes=[];
+    public function mount():void{$this->openDate=today()->toDateString();}
+    #[Computed] public function vacancies(){return JobVacancy::withCount('applicants')->latest()->get();}
+    #[Computed] public function applicants(){return JobApplicant::with('vacancy')->when($this->search,fn($q)=>$q->where(fn($x)=>$x->where('full_name','like','%'.$this->search.'%')->orWhere('email','like','%'.$this->search.'%')))->when($this->status,fn($q)=>$q->where('status',$this->status))->latest('applied_at')->paginate(20);}
+    public function saveVacancy():void{abort_unless(auth()->user()->can('recruitment.manage'),403);$d=$this->validate(['title'=>'required|string|max:180','description'=>'required|string|max:5000','openings'=>'required|integer|min:1|max:100','openDate'=>'required|date','closeDate'=>'nullable|date|after_or_equal:openDate']);JobVacancy::create(['company_id'=>auth()->user()->employee?->company_id ?? \App\Models\Company::query()->value('id'),'title'=>$d['title'],'description'=>$d['description'],'openings'=>$d['openings'],'open_date'=>$d['openDate'],'close_date'=>$d['closeDate']?:null,'status'=>'open','created_by'=>auth()->id()]);$this->reset(['showVacancy','title','description','closeDate']);unset($this->vacancies);session()->flash('success','បានបង្កើតប្រកាសការងារ។');}
+    public function move(int $id,RecruitmentWorkflowService $s):void{abort_unless(auth()->user()->can('recruitment.manage'),403);try{$s->moveApplicant(JobApplicant::findOrFail($id),$this->nextStatus[$id]??'', $this->notes[$id]??null);}catch(\DomainException $e){$this->addError('workflow',$e->getMessage());return;}unset($this->applicants);}
+}; ?>
+<div class="space-y-6">
+<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><flux:heading size="xl">បំពង់ជ្រើសរើសបុគ្គលិក</flux:heading><flux:subheading>Vacancy → Screening → Interview → Offer → Hired</flux:subheading></div>@can('recruitment.manage')<flux:button variant="primary" icon="plus" wire:click="$toggle('showVacancy')">បង្កើតការងារ</flux:button>@endcan</div>
+@if(session('success'))<div class="rounded-xl border border-green-200 bg-green-50 p-4 text-green-800">{{session('success')}}</div>@endif @error('workflow')<div class="rounded-xl bg-red-50 p-4 text-red-700">{{$message}}</div>@enderror
+@if($showVacancy)<form wire:submit="saveVacancy" class="grid gap-4 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 md:grid-cols-2"><flux:input wire:model="title" label="មុខតំណែង *"/><flux:input wire:model="openings" type="number" min="1" label="ចំនួន *"/><flux:input wire:model="openDate" type="date" label="ថ្ងៃបើក *"/><flux:input wire:model="closeDate" type="date" label="ថ្ងៃបិទ"/><div class="md:col-span-2"><flux:textarea wire:model="description" label="ពិពណ៌នា *"/></div><div class="md:col-span-2 flex justify-end"><flux:button type="submit" variant="primary">រក្សាទុក</flux:button></div></form>@endif
+<div class="grid gap-4 md:grid-cols-3">@foreach($this->vacancies as $v)<div class="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900"><div class="flex justify-between"><flux:heading>{{$v->title}}</flux:heading><flux:badge>{{$v->status}}</flux:badge></div><p class="mt-2 text-sm text-zinc-500">{{$v->applicants_count}} បេក្ខជន · {{$v->openings}} កន្លែង</p></div>@endforeach</div>
+<div class="grid gap-3 sm:grid-cols-[1fr_220px]"><flux:input wire:model.live.debounce.300ms="search" icon="magnifying-glass" placeholder="ស្វែងរកបេក្ខជន..."/><flux:select wire:model.live="status"><option value="">គ្រប់ស្ថានភាព</option>@foreach(['applied','screening','shortlisted','interview','offer_pending','offered','accepted','hired','rejected','declined'] as $s)<option value="{{$s}}">{{$s}}</option>@endforeach</flux:select></div>
+<div class="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900"><div class="overflow-x-auto"><table class="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700"><thead><tr class="text-left text-sm"><th class="px-5 py-3">បេក្ខជន</th><th class="px-5 py-3">ការងារ</th><th class="px-5 py-3">ស្ថានភាព</th><th class="px-5 py-3">សកម្មភាព</th></tr></thead><tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">@forelse($this->applicants as $a)<tr><td class="px-5 py-4"><div class="font-medium">{{$a->full_name}}</div><div class="text-xs text-zinc-500">{{$a->email}} · {{$a->phone}}</div></td><td class="px-5 py-4">{{$a->vacancy->title}}</td><td class="px-5 py-4"><flux:badge>{{$a->status}}</flux:badge></td><td class="px-5 py-4"><div class="flex min-w-80 gap-2"><flux:select size="sm" wire:model="nextStatus.{{$a->id}}"><option value="">ជំហានបន្ទាប់</option>@foreach(['screening','shortlisted','interview','offer_pending','offered','accepted','hired','rejected','declined'] as $s)<option value="{{$s}}">{{$s}}</option>@endforeach</flux:select><flux:input size="sm" wire:model="notes.{{$a->id}}" placeholder="មតិ"/><flux:button size="sm" wire:click="move({{$a->id}})">អនុវត្ត</flux:button></div></td></tr>@empty<tr><td colspan="4" class="p-10 text-center text-zinc-500">មិនទាន់មានបេក្ខជន។</td></tr>@endforelse</tbody></table></div><div class="p-4">{{$this->applicants->links()}}</div></div>
+</div>

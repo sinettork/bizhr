@@ -5,53 +5,132 @@ namespace App\Services;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class LeaveApprovalService
 {
-    public function approve(LeaveRequest $request, User $reviewer, ?string $note = null): LeaveRequest
+    private const MANAGER_ROLES = ['Manager'];
+    private const HR_ROLES = ['HR Administrator', 'Owner', 'Super Admin'];
+
+    public function __construct(private readonly LeaveDayCalculator $dayCalculator) {}
+
+    public function approve(LeaveRequest $leaveRequest, User $reviewer, ?string $note = null): LeaveRequest
     {
-        return DB::transaction(function () use ($request, $reviewer, $note) {
-            $request->refresh();
+        return DB::transaction(function () use ($leaveRequest, $reviewer, $note): LeaveRequest {
+            $leaveRequest = LeaveRequest::query()->with('employee')->lockForUpdate()->findOrFail($leaveRequest->id);
+            $this->assertSameCompany($leaveRequest, $reviewer);
 
-            if ($request->status !== 'pending') {
-                throw ValidationException::withMessages(['status' => 'Only pending leave requests can be approved.']);
+            if ($leaveRequest->status === 'pending') {
+                $this->assertManagerCanReview($leaveRequest, $reviewer);
+                $leaveRequest->update([
+                    'status' => 'manager_approved',
+                    'manager_id' => $reviewer->id,
+                    'manager_reviewed_at' => now(),
+                    'manager_note' => $note,
+                ]);
+
+                return $leaveRequest->fresh();
             }
 
-            $balance = LeaveBalance::query()
-                ->where('employee_id', $request->employee_id)
-                ->where('leave_type_id', $request->leave_type_id)
-                ->where('year', $request->start_date->year)
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            if ((float) $balance->remaining_days < (float) $request->total_days) {
-                throw ValidationException::withMessages(['status' => 'The employee no longer has enough leave balance.']);
+            if ($leaveRequest->status !== 'manager_approved') {
+                throw ValidationException::withMessages(['status' => 'សំណើនេះត្រូវបានបញ្ចប់រួចហើយ។']);
             }
 
-            $balance->decrement('remaining_days', $request->total_days);
-            $balance->increment('used_days', $request->total_days);
+            $this->assertHrCanReview($reviewer);
+            $daysByYear = $this->dayCalculator->daysByYear(
+                $leaveRequest->employee,
+                CarbonImmutable::parse($leaveRequest->start_date),
+                CarbonImmutable::parse($leaveRequest->end_date),
+            );
 
-            $request->update([
+            if (array_sum($daysByYear) !== (int) $leaveRequest->total_days) {
+                throw ValidationException::withMessages([
+                    'status' => 'ប្រតិទិនការងារបានផ្លាស់ប្តូរ។ សូមពិនិត្យ និងបង្កើតសំណើឡើងវិញ។',
+                ]);
+            }
+
+            foreach ($daysByYear as $year => $days) {
+                $balance = LeaveBalance::query()
+                    ->where('employee_id', $leaveRequest->employee_id)
+                    ->where('leave_type_id', $leaveRequest->leave_type_id)
+                    ->where('year', $year)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if ((float) $balance->remaining_days < $days) {
+                    throw ValidationException::withMessages([
+                        'status' => "សមតុល្យឈប់សម្រាកឆ្នាំ {$year} មិនគ្រប់គ្រាន់ទេ។",
+                    ]);
+                }
+
+                $balance->decrement('remaining_days', $days);
+                $balance->increment('used_days', $days);
+            }
+
+            $leaveRequest->update([
                 'status' => 'approved',
                 'hr_id' => $reviewer->id,
                 'hr_reviewed_at' => now(),
                 'hr_note' => $note,
             ]);
 
-            return $request->fresh();
+            return $leaveRequest->fresh();
         });
     }
 
-    public function reject(LeaveRequest $request, User $reviewer, ?string $note = null): LeaveRequest
+    public function reject(LeaveRequest $leaveRequest, User $reviewer, ?string $note = null): LeaveRequest
     {
-        if (! in_array($request->status, ['pending', 'manager_approved'], true)) {
-            throw ValidationException::withMessages(['status' => 'This leave request has already been finalized.']);
+        return DB::transaction(function () use ($leaveRequest, $reviewer, $note): LeaveRequest {
+            $leaveRequest = LeaveRequest::query()->with('employee')->lockForUpdate()->findOrFail($leaveRequest->id);
+            $this->assertSameCompany($leaveRequest, $reviewer);
+
+            if ($leaveRequest->status === 'pending') {
+                $this->assertManagerCanReview($leaveRequest, $reviewer);
+                $leaveRequest->update([
+                    'status' => 'rejected',
+                    'manager_id' => $reviewer->id,
+                    'manager_reviewed_at' => now(),
+                    'manager_note' => $note,
+                ]);
+
+                return $leaveRequest->fresh();
+            }
+
+            if ($leaveRequest->status === 'manager_approved') {
+                $this->assertHrCanReview($reviewer);
+                $leaveRequest->update([
+                    'status' => 'rejected',
+                    'hr_id' => $reviewer->id,
+                    'hr_reviewed_at' => now(),
+                    'hr_note' => $note,
+                ]);
+
+                return $leaveRequest->fresh();
+            }
+
+            throw ValidationException::withMessages(['status' => 'សំណើនេះត្រូវបានបញ្ចប់រួចហើយ។']);
+        });
+    }
+
+    private function assertSameCompany(LeaveRequest $leaveRequest, User $reviewer): void
+    {
+        if ($reviewer->employee && $reviewer->employee->company_id !== $leaveRequest->employee->company_id) {
+            abort(403);
         }
+    }
 
-        $request->update(['status' => 'rejected', 'hr_id' => $reviewer->id, 'hr_reviewed_at' => now(), 'hr_note' => $note]);
+    private function assertManagerCanReview(LeaveRequest $leaveRequest, User $reviewer): void
+    {
+        abort_unless($reviewer->hasAnyRole(self::MANAGER_ROLES), 403);
+        abort_unless($reviewer->employee, 403);
+        abort_if($reviewer->employee->id === $leaveRequest->employee_id, 403);
+        abort_unless($reviewer->employee->department_id === $leaveRequest->employee->department_id, 403);
+    }
 
-        return $request->fresh();
+    private function assertHrCanReview(User $reviewer): void
+    {
+        abort_unless($reviewer->hasAnyRole(self::HR_ROLES), 403);
     }
 }

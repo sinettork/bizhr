@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -43,13 +44,14 @@ class EmployeeDocumentController extends Controller
             'file_path' => $path,
         ]);
 
-        return back()->with('status', 'Document uploaded successfully.');
+        return back()->with('status', 'បានផ្ទុកឯកសារឡើងដោយជោគជ័យ។');
     }
 
     public function download(Employee $employee, EmployeeDocument $document)
     {
         $this->authorizeEmployee($employee);
         abort_unless($document->employee_id === $employee->id, 404);
+        abort_unless(Storage::disk('local')->exists($document->file_path), 404);
 
         return Storage::disk('local')->download($document->file_path, $document->original_name);
     }
@@ -62,12 +64,39 @@ class EmployeeDocumentController extends Controller
         Storage::disk('local')->delete($document->file_path);
         $document->delete();
 
-        return back()->with('status', 'Document deleted successfully.');
+        return back()->with('status', 'បានលុបឯកសារដោយជោគជ័យ។');
     }
 
     private function authorizeEmployee(Employee $employee, bool $editing = false): void
     {
+        /** @var User|null $user */
         $user = auth()->user();
-        abort_unless($user && ($editing ? $user->can('employee.edit') : $user->can('employee.view')), 403);
+        abort_unless($user, 403);
+
+        $actor = $user->employee;
+        $isOwnRecord = $actor?->id === $employee->id;
+
+        if ($actor && $actor->company_id !== $employee->company_id) {
+            abort(403);
+        }
+
+        if ($isOwnRecord) {
+            $permission = $editing ? 'employee.edit-own' : 'employee.view-own';
+            abort_unless($user->can($permission), 403);
+
+            return;
+        }
+
+        if ($user->hasAnyRole(['Manager', 'manager'])) {
+            abort(403);
+        }
+
+        if ($editing) {
+            abort_unless($user->can('employee.edit') && $user->can('employee.view-sensitive'), 403);
+
+            return;
+        }
+
+        abort_unless($user->can('employee.view-sensitive'), 403);
     }
 }

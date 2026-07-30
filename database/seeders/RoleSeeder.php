@@ -3,191 +3,108 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class RoleSeeder extends Seeder
 {
+    private const ALIASES = [
+        'Owner' => ['owner'],
+        'HR Administrator' => ['HR Manager', 'hr-administrator'],
+        'Manager' => ['manager'],
+        'Accountant' => ['accountant'],
+        'Employee' => ['employee'],
+        'Super Admin' => [],
+    ];
+
     public function run(): void
     {
-        // Reset cached roles and permissions
-        app()['cache']->forget('spatie.permission.cache');
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        // Create Owner role (super admin)
-        $owner = Role::firstOrCreate(
-            ['name' => 'owner'],
-            ['guard_name' => 'web']
-        );
+        foreach (array_keys(self::ALIASES) as $name) {
+            Role::findOrCreate($name, 'web');
+        }
 
-        // Owner gets all permissions
-        $allPermissions = Permission::all();
-        $owner->syncPermissions($allPermissions);
+        $this->transferAliases();
 
-        // Create HR Administrator role
-        $hrAdmin = Role::firstOrCreate(
-            ['name' => 'hr-administrator'],
-            ['guard_name' => 'web']
-        );
+        $all = Permission::query()->where('guard_name', 'web')->pluck('name')->all();
+        $this->sync('Super Admin', $all);
+        $this->sync('Owner', $all);
 
-        $hrAdminPermissions = [
-            // Employee Management
-            'employee.view',
-            'employee.create',
-            'employee.edit',
-            'employee.delete',
-            'employee.view-sensitive',
+        $this->sync('HR Administrator', [
+            'company.view', 'branch.view', 'department.view', 'position.view', 'employment-type.view',
+            'employee.view', 'employee.view-own', 'employee.create', 'employee.edit',
+            'employee.edit-own', 'employee.view-sensitive',
+            'attendance.view', 'attendance.checkin', 'attendance.checkout',
+            'attendance.correction.request', 'attendance.edit', 'attendance.approve', 'attendance.report',
+            'schedule.view', 'schedule.create', 'schedule.edit', 'schedule.delete',
+            'shift.view', 'shift.create', 'shift.edit', 'shift.delete',
+            'leave.view', 'leave.request', 'leave.approve', 'leave.manage', 'leave.report',
+            'payroll.view-own', 'payroll.view', 'payroll.approve', 'payroll.report',
+            'performance.view', 'performance.create', 'performance.edit', 'performance.manage-goals',
+            'task.view', 'task.create', 'task.edit', 'report.view', 'report.export',
+        ]);
 
-            // Attendance
-            'attendance.view',
-            'attendance.edit',
-            'attendance.approve',
-            'attendance.report',
+        $this->sync('Manager', [
+            'employee.view', 'employee.view-own', 'employee.edit-own',
+            'attendance.view', 'attendance.checkin', 'attendance.checkout',
+            'attendance.correction.request', 'attendance.approve', 'attendance.report',
+            'schedule.view', 'schedule.create', 'schedule.edit',
+            'leave.view', 'leave.request', 'leave.approve', 'leave.report',
+            'payroll.view-own',
+            'performance.view', 'performance.create', 'performance.edit',
+            'task.view', 'task.create', 'task.edit', 'report.view',
+        ]);
 
-            // Leave
-            'leave.view',
-            'leave.approve',
-            'leave.manage',
-            'leave.report',
+        $this->sync('Accountant', [
+            'employee.view', 'attendance.view', 'attendance.report', 'leave.view', 'leave.report',
+            'payroll.view-own', 'payroll.view', 'payroll.edit', 'payroll.process', 'payroll.report',
+            'report.view', 'report.export',
+        ]);
 
-            // Schedules & Shifts
-            'schedule.view',
-            'schedule.create',
-            'schedule.edit',
-            'schedule.delete',
-            'shift.view',
-            'shift.create',
-            'shift.edit',
-            'shift.delete',
+        $this->sync('Employee', [
+            'employee.view-own', 'employee.edit-own',
+            'attendance.view', 'attendance.checkin', 'attendance.checkout', 'attendance.correction.request',
+            'schedule.view', 'leave.view', 'leave.request', 'payroll.view-own',
+            'performance.view', 'task.view',
+        ]);
 
-            // Performance
-            'performance.view',
-            'performance.create',
-            'performance.edit',
-            'performance.manage-goals',
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
 
-            // Tasks
-            'task.view',
-            'task.create',
-            'task.edit',
-            'task.delete',
+    private function transferAliases(): void
+    {
+        foreach (self::ALIASES as $canonicalName => $aliases) {
+            $canonical = Role::findByName($canonicalName, 'web');
 
-            // Reports
-            'report.view',
-            'report.export',
-        ];
+            Role::query()
+                ->where('guard_name', 'web')
+                ->whereIn('name', $aliases)
+                ->get()
+                ->each(function (Role $alias) use ($canonical): void {
+                    DB::table('model_has_roles')
+                        ->where('role_id', $alias->id)
+                        ->get()
+                        ->each(fn ($assignment) => DB::table('model_has_roles')->insertOrIgnore([
+                            'role_id' => $canonical->id,
+                            'model_type' => $assignment->model_type,
+                            'model_id' => $assignment->model_id,
+                        ]));
 
-        $hrAdmin->syncPermissions(
-            Permission::whereIn('name', $hrAdminPermissions)->get()
-        );
+                    $alias->delete();
+                });
+        }
+    }
 
-        // Create Manager role
-        $manager = Role::firstOrCreate(
-            ['name' => 'manager'],
-            ['guard_name' => 'web']
-        );
-
-        $managerPermissions = [
-            // Limited employee viewing
-            'employee.view',
-            'employee.view-own',
-            'employee.edit-own',
-
-            // Attendance
-            'attendance.view',
-            'attendance.report',
-            'attendance.approve',
-
-            // Leave
-            'leave.view',
-            'leave.approve',
-            'leave.report',
-
-            // Schedules
-            'schedule.view',
-            'schedule.create',
-            'schedule.edit',
-
-            // Performance - for their team
-            'performance.view',
-            'performance.create',
-            'performance.edit',
-
-            // Tasks
-            'task.view',
-            'task.create',
-            'task.edit',
-
-            // Reports
-            'report.view',
-            'report.export',
-        ];
-
-        $manager->syncPermissions(
-            Permission::whereIn('name', $managerPermissions)->get()
-        );
-
-        // Create Accountant role
-        $accountant = Role::firstOrCreate(
-            ['name' => 'accountant'],
-            ['guard_name' => 'web']
-        );
-
-        $accountantPermissions = [
-            // Employee basic info only
-            'employee.view',
-
-            // Payroll access
-            'payroll.view',
-            'payroll.edit',
-            'payroll.approve',
-            'payroll.process',
-            'payroll.report',
-
-            // Attendance (for payroll)
-            'attendance.view',
-            'attendance.report',
-
-            // Leave (for payroll)
-            'leave.view',
-            'leave.report',
-
-            // Reports
-            'report.view',
-            'report.export',
-        ];
-
-        $accountant->syncPermissions(
-            Permission::whereIn('name', $accountantPermissions)->get()
-        );
-
-        // Create Employee role (default for all employees)
-        $employee = Role::firstOrCreate(
-            ['name' => 'employee'],
-            ['guard_name' => 'web']
-        );
-
-        $employeePermissions = [
-            // View own profile
-            'employee.view-own',
-            'employee.edit-own',
-
-            // Attendance
-            'attendance.checkin',
-            'attendance.checkout',
-
-            // Leave
-            'leave.view',
-            'leave.request',
-
-            // View own schedule
-            'schedule.view',
-
-            // View own tasks
-            'task.view',
-        ];
-
-        $employee->syncPermissions(
-            Permission::whereIn('name', $employeePermissions)->get()
+    private function sync(string $roleName, array $permissions): void
+    {
+        Role::findByName($roleName, 'web')->syncPermissions(
+            Permission::query()
+                ->where('guard_name', 'web')
+                ->whereIn('name', $permissions)
+                ->get()
         );
     }
 }
