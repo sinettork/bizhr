@@ -53,6 +53,19 @@ class DatabaseBackupCommand extends Command
             throw new RuntimeException("Backup integrity verification failed: {$integrity}");
         }
 
+        // Smoke test: Ensure critical tables exist and have data
+        $pdo = new \PDO('sqlite:'.$temporary);
+        $tables = ['users', 'employees', 'payroll_items'];
+        foreach ($tables as $table) {
+            $count = $pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{$table}'")->fetchColumn();
+            if ($count === 0) {
+                $pdo = null;
+                @unlink($temporary);
+                throw new RuntimeException("Backup verification failed: Table '{$table}' is missing.");
+            }
+        }
+        $pdo = null;
+
         $finalized = false;
 
         for ($attempt = 1; $attempt <= 10; $attempt++) {

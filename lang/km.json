@@ -30,5 +30,20 @@
     "Search": "ស្វែងរក",
     "Actions": "សកម្មភាព",
     "Yes": "បាទ/ចាស",
-    "No": "ទេ"
+    "No": "ទេ",
+    "Import": "នាំចូល",
+    "Export": "នាំចេញ",
+    "Download Template": "ទាញយកគំរូ",
+    "Process File": "ត្រួតពិនិត្យឯកសារ",
+    "Confirm Import": "បញ្ជាក់ការនាំចូល",
+    "Invalid": "មិនត្រឹមត្រូវ",
+    "Valid": "ត្រឹមត្រូវ",
+    "Row": "ជួរដេក",
+    "Errors": "បញ្ហា",
+    "Branch": "សាខា",
+    "Department": "ផ្នែក",
+    "Position": "មុខតំណែង",
+    "Status": "ស្ថានភាព",
+    "Active": "សកម្ម",
+    "Inactive": "មិនសកម្ម"
 }

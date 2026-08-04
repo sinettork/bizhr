@@ -31,6 +31,16 @@ class PayrollCalculatorService
     public function generate(PayrollPeriod $period): int
     {
         return DB::transaction(function () use ($period): int {
+            // Concurrency protection: lock the period record for update
+            $period = PayrollPeriod::query()
+                ->whereKey($period->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (in_array($period->status, ['approved', 'paid', 'closed'], true)) {
+                throw new \RuntimeException('វគ្គនេះមិនអាចគណនាឡើងវិញបានទេ។');
+            }
+
             $employees = Employee::query()
                 ->where('company_id', $period->company_id)
                 ->where('is_active', true)

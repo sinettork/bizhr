@@ -27,6 +27,10 @@ new #[Title('បញ្ជីបុគ្គលិក')] class extends Component
     public ?int $employeeId = null;
 
     public bool $showForm = false;
+    public bool $showImport = false;
+    public $importFile = null;
+    public array $importResults = [];
+    public bool $isImportValid = false;
 
     /*
     |--------------------------------------------------------------------------
@@ -85,6 +89,67 @@ new #[Title('បញ្ជីបុគ្គលិក')] class extends Component
     public $profile_photo_upload = null;
 
     public ?string $currentProfilePhoto = null;
+
+    public function processImport(\App\Services\EmployeeImportService $service): void
+    {
+        $this->validate([
+            'importFile' => 'required|mimes:csv,txt|max:1024',
+        ]);
+
+        $path = $this->importFile->getRealPath();
+        $file = fopen($path, 'r');
+        $header = fgetcsv($file);
+        
+        // Basic mapping (assuming fixed order for simplicity)
+        // employee_code, first_name, last_name, full_name_km, branch_id, department_id, hire_date, status, salary, currency
+        $rows = [];
+        while (($data = fgetcsv($file)) !== false) {
+            if (count($data) < 6) continue;
+            $rows[] = [
+                'employee_code' => $data[0],
+                'first_name' => $data[1],
+                'last_name' => $data[2],
+                'full_name_km' => $data[3],
+                'branch_id' => (int) $data[4],
+                'department_id' => (int) $data[5],
+                'hire_date' => $data[6],
+                'employment_status' => $data[7] ?: 'Active',
+                'base_salary' => $data[8] ?: 0,
+                'salary_currency' => $data[9] ?: 'USD',
+            ];
+        }
+        fclose($file);
+
+        $this->importResults = $service->validate($rows, $this->companyId);
+        $this->isImportValid = collect($this->importResults)->every(fn($r) => $r['is_valid']);
+    }
+
+    public function confirmImport(\App\Services\EmployeeImportService $service): void
+    {
+        if (!$this->isImportValid) return;
+
+        $validRows = collect($this->importResults)->map(fn($r) => $r['data'])->toArray();
+        $count = $service->commit($validRows, $this->companyId);
+
+        $this->reset(['showImport', 'importFile', 'importResults', 'isImportValid']);
+        session()->flash('success', "បាននាំចូលបុគ្គលិកចំនួន {$count} នាក់ដោយជោគជ័យ។");
+        unset($this->employees);
+    }
+
+    public function downloadTemplate()
+    {
+        return response()->streamDownload(function () {
+            $output = fopen('php://output', 'w');
+            fputcsv($output, [
+                'employee_code', 'first_name', 'last_name', 'full_name_km', 
+                'branch_id', 'department_id', 'hire_date', 'status', 'salary', 'currency'
+            ]);
+            fputcsv($output, [
+                'EMP001', 'Sok', 'Dara', 'សុខ ដារ៉ា', '1', '1', '2024-01-01', 'Active', '500', 'USD'
+            ]);
+            fclose($output);
+        }, 'employee_import_template.csv');
+    }
 
     public function mount()
     {
@@ -1114,16 +1179,89 @@ new #[Title('បញ្ជីបុគ្គលិក')] class extends Component
             </p>
         </div>
 
-        <flux:button
-            type="button"
-            variant="primary"
-            icon="plus"
-            :href="route('employees.create')"
-            wire:navigate
-        >
-            បន្ថែមបុគ្គលិក
-        </flux:button>
+        <div class="flex gap-2">
+            <flux:button
+                type="button"
+                variant="ghost"
+                icon="arrow-up-tray"
+                wire:click="$set('showImport', true)"
+            >
+                នាំចូល (CSV)
+            </flux:button>
+
+            <flux:button
+                type="button"
+                variant="primary"
+                icon="plus"
+                :href="route('employees.create')"
+                wire:navigate
+            >
+                បន្ថែមបុគ្គលិក
+            </flux:button>
+        </div>
     </div>
+
+    {{-- Import form --}}
+    @if ($showImport)
+        <div class="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900 sm:p-6">
+            <div class="mb-6 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-zinc-900 dark:text-white">នាំចូលបុគ្គលិកពី CSV</h2>
+                    <p class="mt-1 text-sm text-zinc-500">ទាញយកគំរូ CSV រួចបំពេញព័ត៌មានបុគ្គលិកដើម្បីនាំចូលក្នុងប្រព័ន្ធ។</p>
+                </div>
+                <flux:button variant="ghost" wire:click="$set('showImport', false)">បិទ</flux:button>
+            </div>
+
+            <div class="space-y-4">
+                <div class="flex items-center gap-4">
+                    <flux:button variant="ghost" icon="arrow-down-tray" wire:click="downloadTemplate">ទាញយកគំរូ CSV</flux:button>
+                    <div class="flex-1">
+                        <flux:input type="file" wire:model="importFile" accept=".csv" />
+                    </div>
+                    <flux:button variant="primary" wire:click="processImport" wire:loading.attr="disabled">ត្រួតពិនិត្យឯកសារ</flux:button>
+                </div>
+
+                @if ($importResults)
+                    <div class="mt-6 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
+                        <table class="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
+                            <thead class="bg-zinc-50 dark:bg-zinc-800/60">
+                                <tr class="text-left text-xs text-zinc-500">
+                                    <th class="px-4 py-2">ជួរដេក</th>
+                                    <th class="px-4 py-2">លេខកូដ</th>
+                                    <th class="px-4 py-2">ឈ្មោះ</th>
+                                    <th class="px-4 py-2">ស្ថានភាព</th>
+                                    <th class="px-4 py-2">បញ្ហា</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                                @foreach ($importResults as $result)
+                                    <tr class="text-sm">
+                                        <td class="px-4 py-2">{{ $result['row'] }}</td>
+                                        <td class="px-4 py-2">{{ $result['data']['employee_code'] }}</td>
+                                        <td class="px-4 py-2">{{ $result['data']['first_name'] }} {{ $result['data']['last_name'] }}</td>
+                                        <td class="px-4 py-2">
+                                            @if ($result['is_valid'])
+                                                <flux:badge variant="success">ត្រឹមត្រូវ</flux:badge>
+                                            @else
+                                                <flux:badge variant="danger">មិនត្រឹមត្រូវ</flux:badge>
+                                            @endif
+                                        </td>
+                                        <td class="px-4 py-2 text-xs text-red-600">
+                                            {{ implode(', ', $result['errors']) }}
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-4 flex justify-end">
+                        <flux:button variant="primary" :disabled="!$isImportValid" wire:click="confirmImport">បញ្ជាក់ការនាំចូល</flux:button>
+                    </div>
+                @endif
+            </div>
+        </div>
+    @endif
 
     {{-- Statistics --}}
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
