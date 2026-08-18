@@ -33,41 +33,44 @@
                     <div class="fw-semibold text-dark">Branch network</div>
                     <div class="small text-body-secondary">Locations, workforce and operating contacts.</div>
                 </div>
-                <span class="badge text-bg-light border text-dark">{{ number_format($branches->total()) }} total</span>
+                <span class="badge status-counter">{{ number_format($branches->total()) }} total</span>
             </div>
 
             <div class="row g-2 p-3">
                 @foreach($branches as $branch)
-                    <div class="col-12 col-xl-6">
-                        <article class="card h-100 shadow-none">
-                            <div class="card-body p-3">
+                    <div class="col-12 col-md-6 col-xl-4 col-xxl-3">
+                        <article class="card h-100 shadow-none branch-entity-card">
+                            <div class="card-body p-3 d-flex flex-column">
                                 <div class="d-flex align-items-start justify-content-between gap-2">
                                     <div class="d-flex align-items-start gap-2 min-w-0">
-                                        <div class="page-icon flex-shrink-0" style="width:2.25rem;height:2.25rem;"><i class="fa-solid fa-building"></i></div>
+                                        <span class="page-icon flex-shrink-0" style="width:38px;height:38px;font-size:.82rem;"><i class="fa-solid fa-building"></i></span>
                                         <div class="min-w-0">
-                                            <div class="d-flex flex-wrap align-items-center gap-2">
-                                                <h2 class="h6 mb-0 text-dark">{{ $branch->name }}</h2>
+                                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                <h2 class="h6 mb-0 text-dark text-truncate">{{ $branch->name }}</h2>
                                                 @if($branch->is_head_office)
                                                     <span class="badge text-bg-primary">Head office</span>
                                                 @endif
                                                 <span class="badge text-bg-{{ $branch->is_active ? 'success' : 'secondary' }}">{{ $branch->is_active ? 'Active' : 'Inactive' }}</span>
                                             </div>
-                                            <div class="small text-body-secondary mt-1">{{ $branch->code }}{{ $branch->city ? ' · '.$branch->city : '' }}</div>
+                                            <div class="small text-body-secondary mt-1 text-truncate">
+                                                <i class="fa-solid fa-location-dot me-1"></i>{{ $branch->city ?: 'Location not set' }}
+                                            </div>
+                                            <div class="small text-body-secondary text-truncate">{{ $branch->code }}</div>
                                         </div>
                                     </div>
 
-                                    <div class="dropdown">
-                                        <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Branch actions">
-                                            <i class="fa-solid fa-ellipsis"></i>
+                                    <div class="dropdown flex-shrink-0">
+                                        <button class="btn btn-action-link btn-sm px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Branch actions">
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
                                         </button>
-                                        <ul class="dropdown-menu dropdown-menu-end">
+                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                                             @can('branch.edit')
                                                 <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editBranch{{ $branch->id }}"><i class="fa-solid fa-pen me-2"></i>Edit branch</button></li>
                                             @endcan
                                             @can('branch.delete')
                                                 <li><hr class="dropdown-divider"></li>
                                                 <li>
-                                                    <form method="POST" action="{{ route('branches.destroy',$branch) }}" onsubmit="return confirm('Delete this unreferenced branch?')">
+                                                    <form method="POST" action="{{ route('branches.destroy',$branch) }}" data-confirm="Delete this unreferenced branch?">
                                                         @csrf @method('DELETE')
                                                         <button class="dropdown-item text-danger" type="submit"><i class="fa-solid fa-trash me-2"></i>Delete branch</button>
                                                     </form>
@@ -77,28 +80,36 @@
                                     </div>
                                 </div>
 
-                                <div class="d-flex flex-wrap align-items-center gap-x-4 gap-2 mt-3 pt-2 border-top small">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <i class="fa-solid fa-users text-body-secondary"></i>
-                                        <span class="text-body-secondary">Employees</span>
-                                        <strong class="text-dark">{{ number_format($branch->employees_count) }}</strong>
+                                <div class="small mt-3">
+                                    <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                                        <span class="text-body-secondary">Workforce footprint</span>
+                                        <strong class="text-dark">{{ number_format($branch->employees_count) }} emp · {{ number_format($branch->departments_count) }} dept</strong>
                                     </div>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <i class="fa-solid fa-sitemap text-body-secondary"></i>
-                                        <span class="text-body-secondary">Departments</span>
-                                        <strong class="text-dark">{{ number_format($branch->departments_count) }}</strong>
+                                    <div class="progress" style="height:4px;">
+                                        @php($footprint = min(100, max(8, ($branch->employees_count * 8) + ($branch->departments_count * 6))))
+                                        <div class="progress-bar" role="progressbar" style="width: {{ $footprint }}%" aria-label="Workforce footprint"></div>
                                     </div>
                                 </div>
 
-                                <div class="row g-2 mt-1 small">
-                                    <div class="col-sm-6">
-                                        <span class="text-body-secondary">Manager</span>
-                                        <span class="fw-medium text-dark ms-1">{{ $branch->manager_name ?: 'Not assigned' }}</span>
+                                <hr class="my-3">
+
+                                <div class="row g-0 text-center mt-auto">
+                                    <div class="col-4 px-1">
+                                        <div class="fw-bold text-dark">{{ number_format($branch->employees_count) }}</div>
+                                        <div class="small text-body-secondary">Employees</div>
                                     </div>
-                                    <div class="col-sm-6 text-sm-end">
-                                        <span class="text-body-secondary">Contact</span>
-                                        <span class="fw-medium text-dark ms-1 text-break">{{ $branch->phone ?: $branch->email ?: 'Not provided' }}</span>
+                                    <div class="col-4 px-1 border-start border-end">
+                                        <div class="fw-bold text-dark">{{ number_format($branch->departments_count) }}</div>
+                                        <div class="small text-body-secondary">Departments</div>
                                     </div>
+                                    <div class="col-4 px-1">
+                                        <div class="fw-semibold text-dark text-truncate" title="{{ $branch->manager_name ?: 'Not assigned' }}">{{ $branch->manager_name ?: '—' }}</div>
+                                        <div class="small text-body-secondary">Manager</div>
+                                    </div>
+                                </div>
+
+                                <div class="small text-body-secondary text-truncate mt-3 pt-2 border-top" title="{{ $branch->phone ?: $branch->email ?: 'Not provided' }}">
+                                    <i class="fa-solid fa-phone me-1"></i>{{ $branch->phone ?: $branch->email ?: 'No primary contact' }}
                                 </div>
                             </div>
                         </article>
