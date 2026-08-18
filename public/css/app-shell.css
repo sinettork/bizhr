@@ -4,12 +4,32 @@
     --app-shell-sidebar-width: 244px;
 }
 
+html {
+    scroll-padding-top: calc(var(--app-shell-topbar-height) + 12px);
+}
+
+.app-body {
+    min-height: 100dvh;
+    padding-top: var(--app-shell-topbar-height);
+    overflow-x: hidden;
+}
+
 .app-topbar.app-navbar {
+    position: fixed !important;
+    z-index: 1040;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: var(--app-shell-topbar-height);
     min-height: var(--app-shell-topbar-height);
     border-top: 3px solid #4b43cf;
     background: #fff;
     color: var(--app-ink);
     box-shadow: 0 1px 0 rgba(31, 45, 78, .1) !important;
+}
+
+.app-topbar .container-fluid {
+    min-height: 100%;
 }
 
 .app-topbar .navbar-brand {
@@ -103,7 +123,10 @@
 }
 
 .app-sidebar .offcanvas-body {
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
 }
 
 .app-sidebar-nav {
@@ -204,6 +227,13 @@
     line-height: 1.35;
 }
 
+.app-workspace {
+    position: relative;
+    min-width: 0;
+    min-height: calc(100dvh - var(--app-shell-topbar-height));
+    isolation: isolate;
+}
+
 @media (min-width: 1200px) {
     .app-sidebar {
         position: fixed;
@@ -212,17 +242,18 @@
         bottom: 0;
         left: 0;
         width: var(--app-shell-sidebar-width);
+        height: calc(100dvh - var(--app-shell-topbar-height));
         visibility: visible !important;
         transform: none !important;
     }
 
     .app-sidebar .offcanvas-body {
-        height: calc(100vh - var(--app-shell-topbar-height));
+        height: 100%;
+        max-height: 100%;
     }
 
     .app-workspace {
         margin-left: var(--app-shell-sidebar-width);
-        min-height: calc(100vh - var(--app-shell-topbar-height));
     }
 }
 
@@ -231,6 +262,7 @@
 }
 
 @media print {
+    .app-body { padding-top: 0; }
     .app-sidebar,
     .app-topbar { display: none !important; }
     .app-workspace { margin-left: 0 !important; }
