@@ -23,9 +23,37 @@ class AssetController extends Controller
     public function index(Request $request): View
     {
         $companyId = $this->companyId();
-        $assets = Asset::query()->where('company_id', $companyId)->withCount(['assignments as open_assignments' => fn ($q) => $q->where('status', 'assigned')])->when($request->filled('search'), fn ($q) => $q->where(fn ($x) => $x->where('asset_code', 'like', '%'.trim($request->string('search')).'%')->orWhere('name', 'like', '%'.trim($request->string('search')).'%')))->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))->latest()->paginate($this->perPage($request, 20))->withQueryString();
+        $assets = Asset::query()
+            ->where('company_id', $companyId)
+            ->withCount(['assignments as open_assignments' => fn ($q) => $q->where('status', 'assigned')])
+            ->when($request->filled('search'), function ($query) use ($request): void {
+                $term = '%'.trim((string) $request->input('search')).'%';
+                $query->where(function ($assets) use ($term): void {
+                    $assets->where('asset_code', 'like', $term)
+                        ->orWhere('name', 'like', $term)
+                        ->orWhere('category', 'like', $term)
+                        ->orWhere('serial_number', 'like', $term);
+                });
+            })
+            ->when($request->filled('category'), fn ($q) => $q->where('category', $request->string('category')->toString()))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
+            ->latest()
+            ->paginate($this->perPage($request, 20))
+            ->withQueryString();
 
-        return view('assets.index', ['assets' => $assets, 'employees' => Employee::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('full_name_en')->get()]);
+        $categories = Asset::query()
+            ->where('company_id', $companyId)
+            ->whereNotNull('category')
+            ->where('category', '!=', '')
+            ->distinct()
+            ->orderBy('category')
+            ->pluck('category');
+
+        return view('assets.index', [
+            'assets' => $assets,
+            'categories' => $categories,
+            'employees' => Employee::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('full_name_en')->get(),
+        ]);
     }
 
     public function store(Request $request, UploadedFileSecurityService $fileSecurity): RedirectResponse
