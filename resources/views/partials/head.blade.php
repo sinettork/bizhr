@@ -8,3 +8,4 @@
 <link href="{{ asset('vendor/fontawesome/css/all.min.css') }}" rel="stylesheet">
 <link href="{{ asset('css/app.css') }}" rel="stylesheet">
 <link href="{{ asset('css/status.css') }}" rel="stylesheet">
+<link href="{{ asset('css/app-shell.css') }}" rel="stylesheet">
