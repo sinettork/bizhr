@@ -34,12 +34,12 @@
 
     <div class="reference-list" data-list-container>
         @if($departments->count())
-            <div class="p-3 border-bottom bg-body-tertiary d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div class="px-3 py-2 border-bottom bg-body-tertiary d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div>
                     <div class="fw-semibold text-dark">Organization structure</div>
-                    <div class="small text-body-secondary">Departments are grouped by branch so reporting lines and workforce distribution are easier to scan.</div>
+                    <div class="small text-body-secondary">Departments grouped by branch for quick workforce scanning.</div>
                 </div>
-                <span class="badge text-bg-light border text-dark">{{ number_format($departments->total()) }} total</span>
+                <span class="badge status-counter">{{ number_format($departments->total()) }} total</span>
             </div>
 
             @php
@@ -50,31 +50,39 @@
                 @foreach($departmentGroups as $branchName => $group)
                     <section class="mb-4 last-child-mb-0">
                         <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="page-icon" style="width:34px;height:34px;font-size:.8rem;"><i class="fa-solid fa-building"></i></span>
-                                <div>
-                                    <h2 class="h6 mb-0">{{ $branchName }}</h2>
-                                    <div class="small text-body-secondary">{{ $group->count() }} department{{ $group->count() === 1 ? '' : 's' }} on this page</div>
+                            <div class="d-flex align-items-center gap-2 min-w-0">
+                                <span class="page-icon flex-shrink-0" style="width:30px;height:30px;font-size:.72rem;"><i class="fa-solid fa-building"></i></span>
+                                <div class="min-w-0">
+                                    <h2 class="h6 mb-0 text-truncate">{{ $branchName }}</h2>
+                                    <div class="small text-body-secondary">{{ $group->count() }} department{{ $group->count() === 1 ? '' : 's' }}</div>
                                 </div>
                             </div>
                         </div>
 
                         <div class="row g-2">
                             @foreach($group as $department)
-                                <div class="col-12 col-lg-6">
-                                    <article class="card h-100 shadow-none">
+                                <div class="col-12 col-md-6 col-xl-4">
+                                    <article class="card h-100 shadow-none department-compact-card">
                                         <div class="card-body p-3">
-                                            <div class="d-flex align-items-start justify-content-between gap-3">
-                                                <div class="min-w-0">
-                                                    <div class="d-flex flex-wrap align-items-center gap-2">
-                                                        <h3 class="h6 mb-0 text-dark">{{ $department->name }}</h3>
-                                                        <span class="badge text-bg-{{ $department->is_active ? 'success' : 'secondary' }}">{{ $department->is_active ? 'Active' : 'Inactive' }}</span>
+                                            <div class="d-flex align-items-start justify-content-between gap-2">
+                                                <div class="d-flex align-items-start gap-2 min-w-0">
+                                                    <span class="page-icon flex-shrink-0" style="width:38px;height:38px;font-size:.82rem;"><i class="fa-solid fa-sitemap"></i></span>
+                                                    <div class="min-w-0">
+                                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                            <h3 class="h6 mb-0 text-dark text-truncate">{{ $department->name }}</h3>
+                                                            <span class="badge text-bg-{{ $department->is_active ? 'success' : 'secondary' }}">{{ $department->is_active ? 'Active' : 'Inactive' }}</span>
+                                                        </div>
+                                                        <div class="small text-body-secondary mt-1 text-truncate">
+                                                            <i class="fa-solid fa-code me-1"></i>{{ $department->code ?: 'No code' }}
+                                                        </div>
                                                     </div>
-                                                    <div class="small text-body-secondary mt-1">{{ $department->code ?: 'No department code' }}</div>
                                                 </div>
+
                                                 <div class="dropdown flex-shrink-0">
-                                                    <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Department actions"><i class="fa-solid fa-ellipsis"></i></button>
-                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                    <button class="btn btn-action-link btn-sm px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Department actions">
+                                                        <i class="fa-solid fa-ellipsis-vertical"></i>
+                                                    </button>
+                                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                                                         @can('department.edit')
                                                             <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editDepartment{{ $department->id }}"><i class="fa-solid fa-pen me-2"></i>Edit department</button></li>
                                                         @endcan
@@ -91,14 +99,23 @@
                                                 </div>
                                             </div>
 
-                                            <div class="row g-3 mt-1 small">
-                                                <div class="col-7">
-                                                    <div class="text-body-secondary mb-1">Manager</div>
-                                                    <div class="fw-medium text-dark text-truncate">{{ $department->manager_name ?: 'Not assigned' }}</div>
+                                            <hr class="my-3">
+
+                                            <div class="row g-0 text-center">
+                                                <div class="col-4 px-1">
+                                                    <i class="fa-solid fa-users text-body-secondary small d-block mb-1"></i>
+                                                    <div class="fw-bold text-dark">{{ number_format($department->employees_count) }}</div>
+                                                    <div class="small text-body-secondary">Employees</div>
                                                 </div>
-                                                <div class="col-5 text-end">
-                                                    <div class="text-body-secondary mb-1">Employees</div>
-                                                    <div class="fw-semibold text-dark">{{ number_format($department->employees_count) }}</div>
+                                                <div class="col-4 px-1 border-start border-end">
+                                                    <i class="fa-solid fa-id-badge text-body-secondary small d-block mb-1"></i>
+                                                    <div class="fw-semibold text-dark text-truncate" title="{{ $department->manager_name ?: 'Not assigned' }}">{{ $department->manager_name ?: '—' }}</div>
+                                                    <div class="small text-body-secondary">Manager</div>
+                                                </div>
+                                                <div class="col-4 px-1">
+                                                    <i class="fa-solid fa-building text-body-secondary small d-block mb-1"></i>
+                                                    <div class="fw-semibold text-dark text-truncate" title="{{ $department->branch?->name ?: 'Company-wide' }}">{{ $department->branch?->code ?: '—' }}</div>
+                                                    <div class="small text-body-secondary">Branch</div>
                                                 </div>
                                             </div>
                                         </div>
