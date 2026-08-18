@@ -1,5 +1,6 @@
 /* BizHR status language: semantic text + dot, never filled pills. */
-.badge[class*="text-bg-"] {
+.badge[class*="text-bg-"],
+.status-text[class*="text-bg-"] {
     display: inline-flex;
     align-items: center;
     gap: .38rem;
@@ -15,7 +16,8 @@
     vertical-align: middle;
 }
 
-.badge[class*="text-bg-"]::before {
+.badge[class*="text-bg-"]::before,
+.status-text[class*="text-bg-"]::before {
     content: "";
     width: .43rem;
     height: .43rem;
@@ -25,18 +27,19 @@
     opacity: .88;
 }
 
-.badge.text-bg-primary { color: #4338ca !important; }
-.badge.text-bg-secondary { color: #64748b !important; }
-.badge.text-bg-success { color: #15803d !important; }
-.badge.text-bg-danger { color: #c2414b !important; }
-.badge.text-bg-warning { color: #a16207 !important; }
-.badge.text-bg-info { color: #0369a1 !important; }
-.badge.text-bg-light { color: #64748b !important; }
-.badge.text-bg-dark { color: #334155 !important; }
+.badge.text-bg-primary, .status-text.text-bg-primary { color: #4338ca !important; }
+.badge.text-bg-secondary, .status-text.text-bg-secondary { color: #64748b !important; }
+.badge.text-bg-success, .status-text.text-bg-success { color: #15803d !important; }
+.badge.text-bg-danger, .status-text.text-bg-danger { color: #c2414b !important; }
+.badge.text-bg-warning, .status-text.text-bg-warning { color: #a16207 !important; }
+.badge.text-bg-info, .status-text.text-bg-info { color: #0369a1 !important; }
+.badge.text-bg-light, .status-text.text-bg-light { color: #64748b !important; }
+.badge.text-bg-dark, .status-text.text-bg-dark { color: #334155 !important; }
 
 /* Keep status treatment quiet inside dense tables and cards. */
 .reference-list .badge[class*="text-bg-"],
-.card .badge[class*="text-bg-"] {
+.card .badge[class*="text-bg-"],
+.card .status-text[class*="text-bg-"] {
     font-size: .71rem;
 }
 
