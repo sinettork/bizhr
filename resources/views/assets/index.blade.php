@@ -38,7 +38,7 @@
             <div class="px-3 py-2 border-bottom bg-body-tertiary d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div>
                     <div class="fw-semibold text-dark">Inventory overview</div>
-                    <div class="small text-body-secondary">Photos make large inventories easier to scan and identify.</div>
+                    <div class="small text-body-secondary">Photos, identity and lifecycle status stay visible at a glance.</div>
                 </div>
                 <span class="badge status-counter">{{ number_format($assets->total()) }} total</span>
             </div>
@@ -59,6 +59,13 @@
                             'vehicle' => 'fa-car',
                             default => 'fa-box',
                         };
+                        $availability = match($asset->status) {
+                            'assigned' => 'In use',
+                            'available' => 'Ready',
+                            'lost' => 'Missing',
+                            'retired' => 'Retired',
+                            default => '—',
+                        };
                     @endphp
                     <div class="col-12 col-md-6 col-xl-4 col-xxl-3">
                         <article class="card h-100 shadow-none overflow-hidden">
@@ -76,8 +83,12 @@
                                         <div class="d-flex align-items-start justify-content-between gap-2">
                                             <div class="min-w-0">
                                                 <h2 class="h6 mb-1 text-dark text-truncate">{{ $asset->name }}</h2>
-                                                <div class="small text-body-secondary text-truncate">{{ $asset->asset_code }}</div>
+                                                <div class="small fw-medium text-body-secondary text-truncate">{{ $asset->asset_code }}</div>
+                                                @if($asset->serial_number)
+                                                    <div class="small text-body-secondary text-truncate mt-1" title="{{ $asset->serial_number }}">S/N {{ $asset->serial_number }}</div>
+                                                @endif
                                             </div>
+
                                             <div class="dropdown flex-shrink-0">
                                                 <button class="btn btn-action-link btn-sm px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Asset actions"><i class="fa-solid fa-ellipsis-vertical"></i></button>
                                                 <ul class="dropdown-menu dropdown-menu-end shadow-sm">
@@ -102,24 +113,14 @@
                                     </div>
                                 </div>
 
-                                @if($asset->serial_number)
-                                    <div class="small text-body-secondary text-truncate mt-3" title="{{ $asset->serial_number }}"><i class="fa-solid fa-barcode me-1"></i>S/N {{ $asset->serial_number }}</div>
-                                @endif
-
-                                <hr class="my-3">
-
-                                <div class="row g-0 text-center mt-auto">
-                                    <div class="col-4 px-1">
+                                <div class="mt-3 pt-3 border-top d-flex align-items-center justify-content-between gap-3 small">
+                                    <div class="min-w-0">
+                                        <div class="text-body-secondary">Condition</div>
                                         <div class="fw-semibold text-dark text-capitalize text-truncate">{{ $asset->condition ?: '—' }}</div>
-                                        <div class="small text-body-secondary">Condition</div>
                                     </div>
-                                    <div class="col-4 px-1 border-start border-end">
-                                        <div class="fw-semibold text-dark text-truncate">{{ $asset->category ?: '—' }}</div>
-                                        <div class="small text-body-secondary">Category</div>
-                                    </div>
-                                    <div class="col-4 px-1">
-                                        <div class="fw-semibold text-dark">{{ $asset->status === 'assigned' ? 'In use' : ($asset->status === 'available' ? 'Ready' : '—') }}</div>
-                                        <div class="small text-body-secondary">Availability</div>
+                                    <div class="text-end flex-shrink-0">
+                                        <div class="text-body-secondary">Availability</div>
+                                        <div class="fw-semibold text-dark">{{ $availability }}</div>
                                     </div>
                                 </div>
                             </div>
