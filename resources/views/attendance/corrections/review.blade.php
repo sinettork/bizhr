@@ -17,10 +17,10 @@
             <h2 class="h6 fw-bold mb-1">Pending correction decisions</h2>
             <p class="small text-body-secondary mb-0">Compare the recorded attendance with the employee's requested change before approving.</p>
         </div>
-        <span class="badge rounded-pill text-bg-primary px-3 py-2">{{ $corrections->total() }} pending</span>
+        <span class="status-text text-bg-primary">{{ $corrections->total() }} pending</span>
     </div>
 
-    <div class="vstack gap-3" data-list-container>
+    <div class="vstack gap-3 reference-list" data-list-container>
         @forelse($corrections as $correction)
             @php
                 $attendance = $correction->attendance;
@@ -43,7 +43,7 @@
                             <div>
                                 <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                                     <h3 class="h6 fw-bold mb-0">{{ $employee?->getFullName() }}</h3>
-                                    <span class="badge text-bg-warning">Pending</span>
+                                    <span class="status-text text-bg-warning">Pending</span>
                                 </div>
                                 <div class="small text-body-secondary">
                                     {{ $employee?->employee_code ?: '—' }}
@@ -106,16 +106,14 @@
                         </div>
                     </div>
 
-                    <div class="d-flex flex-wrap justify-content-end gap-2 mt-3 pt-3 border-top">
-                        <button class="btn btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#rejectCorrection{{ $correction->id }}">
-                            <i class="fa-solid fa-xmark me-1"></i>Reject
-                        </button>
-                        <form method="POST" action="{{ route('attendance.corrections.approve', $correction) }}">
-                            @csrf
-                            <button class="btn btn-success" type="submit">
-                                <i class="fa-solid fa-check me-1"></i>Approve correction
-                            </button>
-                        </form>
+                    <div class="mt-3 pt-3 border-top">
+                        <x-decision-actions
+                            class="justify-content-end"
+                            :compact="false"
+                            :approve-url="route('attendance.corrections.approve', $correction)"
+                            reject-target="#rejectCorrection{{ $correction->id }}"
+                            approve-label="Approve correction"
+                        />
                     </div>
                 </div>
             </article>
