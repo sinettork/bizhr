@@ -84,11 +84,13 @@
             </div>
             <x-pagination-footer :paginator="$requests" />
         @else
-            <div class="empty-state py-5 px-3">
-                <i class="fa-solid fa-circle-check fa-2xl d-block mb-3 text-success"></i>
-                <h2 class="h6 mb-1">Approval queue is clear</h2>
-                <p class="text-body-secondary mb-0">All leave requests have been reviewed. New requests will appear here when they need a decision.</p>
-            </div>
+            <x-empty-state
+                class="py-5 px-3"
+                icon="fa-circle-check"
+                tone="success"
+                title="Approval queue is clear"
+                message="All leave requests have been reviewed. New requests will appear here when they need a decision."
+            />
         @endif
     </div>
 
