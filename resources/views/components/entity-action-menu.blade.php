@@ -12,8 +12,14 @@
     'ariaLabel' => 'Actions',
 ])
 
-@if($canEdit || $canDelete)
-    <div class="dropdown flex-shrink-0">
+@php
+    $hasCustomItems = trim((string) $slot) !== '';
+    $hasEdit = $canEdit && ($editTarget || $editUrl);
+    $hasDelete = $canDelete && $deleteUrl;
+@endphp
+
+@if($hasCustomItems || $hasEdit || $hasDelete)
+    <div class="dropdown flex-shrink-0 entity-action-menu">
         <button
             class="btn btn-action-link btn-sm px-1"
             type="button"
@@ -24,8 +30,15 @@
             <i class="fa-solid fa-ellipsis-vertical"></i>
         </button>
 
-        <ul class="dropdown-menu dropdown-menu-end shadow-sm p-1" style="min-width:150px;font-size:.76rem;">
-            @if($canEdit)
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm p-1 entity-action-menu-dropdown" style="min-width:150px;font-size:.76rem;">
+            @if($hasCustomItems)
+                {{ $slot }}
+                @if($hasEdit || $hasDelete)
+                    <li><hr class="dropdown-divider my-1"></li>
+                @endif
+            @endif
+
+            @if($hasEdit)
                 <li>
                     @if($editTarget)
                         <button class="dropdown-item rounded-1 px-2 py-1" type="button" data-bs-toggle="modal" data-bs-target="{{ $editTarget }}">
@@ -39,8 +52,8 @@
                 </li>
             @endif
 
-            @if($canDelete && $deleteUrl)
-                @if($canEdit)
+            @if($hasDelete)
+                @if($hasEdit)
                     <li><hr class="dropdown-divider my-1"></li>
                 @endif
                 <li>
