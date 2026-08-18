@@ -20,59 +20,34 @@ class AttendanceQrController extends Controller
     public function display(Request $request): View
     {
         $companyId = $request->user()->employee?->company_id;
-        $branches = Branch::query()
-            ->where('is_active', true)
-            ->where('attendance_qr_enabled', true)
-            ->when($companyId, fn ($query) => $query->where('company_id', $companyId))
-            ->orderByDesc('is_head_office')
-            ->orderBy('name')
-            ->get();
+        $branches = Branch::query()->where('is_active', true)->where('attendance_qr_enabled', true)->when($companyId, fn ($query) => $query->where('company_id', $companyId))->orderByDesc('is_head_office')->orderBy('name')->get();
+        $qrSvg = null;
+        $qrSession = session('qr_session');
 
-        $qr = session('qr_session');
-        $qrImage = null;
-        if (is_array($qr) && filled($qr['url'] ?? null)) {
-            $png = (new Writer(new GDLibRenderer(320)))->writeString((string) $qr['url']);
-            $qrImage = 'data:image/png;base64,'.base64_encode($png);
+        if (is_array($qrSession) && filled($qrSession['url'] ?? null)) {
+            $renderer = new GDLibRenderer(420);
+            $png = (new Writer($renderer))->writeString((string) $qrSession['url']);
+            $qrSvg = 'data:image/png;base64,'.base64_encode($png);
         }
 
-        return view('attendance.qr.display', compact('branches', 'qr', 'qrImage'));
+        return view('attendance.qr.display', compact('branches', 'qrSvg'));
     }
 
     public function create(Request $request): RedirectResponse
     {
-        $data = $request->validate([
-            'branch_id' => ['required', 'integer'],
-            'lifetime_seconds' => ['nullable', 'integer', 'min:30', 'max:120'],
-        ]);
-
-        $branch = Branch::query()
-            ->whereKey($data['branch_id'])
-            ->where('is_active', true)
-            ->where('attendance_qr_enabled', true)
-            ->firstOrFail();
-
+        $data = $request->validate(['branch_id' => ['required', 'integer'], 'lifetime_seconds' => ['nullable', 'integer', 'min:30', 'max:120']]);
+        $branch = Branch::query()->whereKey($data['branch_id'])->where('is_active', true)->where('attendance_qr_enabled', true)->firstOrFail();
         $actorCompanyId = $request->user()->employee?->company_id;
         abort_unless(! $actorCompanyId || (int) $branch->company_id === (int) $actorCompanyId, 404);
-
         if (! $branch->attendance_qr_token) {
             $branch->regenerateAttendanceQrToken();
         }
-
         AttendanceQrSession::query()->where('expires_at', '<', now()->subHour())->delete();
-
         $token = Str::random(80);
-        $session = AttendanceQrSession::query()->create([
-            'branch_id' => $branch->id,
-            'token_hash' => hash('sha256', $token),
-            'expires_at' => now()->addSeconds($data['lifetime_seconds'] ?? config('attendance.qr.session_lifetime_seconds', 45)),
-            'created_by' => $request->user()->id,
-        ]);
+        $lifetimeSeconds = (int) ($data['lifetime_seconds'] ?? config('attendance.qr.session_lifetime_seconds', 45));
+        $session = AttendanceQrSession::query()->create(['branch_id' => $branch->id, 'token_hash' => hash('sha256', $token), 'expires_at' => now()->addSeconds($lifetimeSeconds), 'created_by' => $request->user()->id]);
 
-        return back()->with('qr_session', [
-            'url' => route('attendance.qr.start', $token),
-            'expires_at' => $session->expires_at->toIso8601String(),
-            'branch' => $branch->name,
-        ]);
+        return back()->with('qr_session', ['url' => route('attendance.qr.start', $token), 'expires_at' => $session->expires_at->toIso8601String(), 'branch' => $branch->name]);
     }
 
     public function verify(string $token): View
@@ -84,86 +59,33 @@ class AttendanceQrController extends Controller
 
     public function record(Request $request, string $token, AttendanceQrService $service): JsonResponse
     {
-        $data = $request->validate([
-            'latitude' => ['required', 'numeric', 'between:-90,90'],
-            'longitude' => ['required', 'numeric', 'between:-180,180'],
-            'accuracy' => ['required', 'numeric', 'gt:0', 'max:100'],
-        ]);
-
+        $data = $request->validate(['latitude' => ['required', 'numeric', 'between:-90,90'], 'longitude' => ['required', 'numeric', 'between:-180,180'], 'accuracy' => ['required', 'numeric', 'gt:0', 'max:100']]);
         $employee = $request->user()->employee;
         abort_unless($employee !== null, 403, 'Your account is not linked to an employee.');
-
         $result = DB::transaction(function () use ($token, $data, $employee, $request, $service): array {
             $session = $this->session($token, true);
-            abort_if(
-                AttendanceQrScanEvent::query()
-                    ->where('attendance_qr_session_id', $session->id)
-                    ->where('employee_id', $employee->id)
-                    ->exists(),
-                422,
-                'This QR code was already used by your account.'
-            );
-
-            $result = $service->process(
-                $employee,
-                $session->branch->attendanceQrPayload(),
-                (float) $data['latitude'],
-                (float) $data['longitude'],
-                $request->ip(),
-                $request->userAgent()
-            );
-
-            AttendanceQrScanEvent::query()->create([
-                'attendance_qr_session_id' => $session->id,
-                'employee_id' => $employee->id,
-                'attendance_id' => $result['attendance']->id,
-                'branch_id' => $session->branch_id,
-                'action' => $result['action'],
-                'latitude' => $data['latitude'],
-                'longitude' => $data['longitude'],
-                'accuracy_meters' => $data['accuracy'],
-                'distance_meters' => $result['distance'],
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-                'recorded_at' => $result['time'],
-            ]);
-
+            abort_if(AttendanceQrScanEvent::query()->where('attendance_qr_session_id', $session->id)->where('employee_id', $employee->id)->exists(), 422, 'This QR code was already used by your account.');
+            $result = $service->process($employee, $session->branch->attendanceQrPayload(), (float) $data['latitude'], (float) $data['longitude'], $request->ip(), $request->userAgent());
+            AttendanceQrScanEvent::query()->create(['attendance_qr_session_id' => $session->id, 'employee_id' => $employee->id, 'attendance_id' => $result['attendance']->id, 'branch_id' => $session->branch_id, 'action' => $result['action'], 'latitude' => $data['latitude'], 'longitude' => $data['longitude'], 'accuracy_meters' => $data['accuracy'], 'distance_meters' => $result['distance'], 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(), 'recorded_at' => $result['time']]);
             $session->increment('scan_count');
 
             return $result;
         }, attempts: 3);
 
-        return response()->json([
-            'action' => $result['action'],
-            'time' => $result['time']->timezone('Asia/Phnom_Penh')->format('d/m/Y H:i:s'),
-            'branch' => $result['branch']->name,
-            'distance' => $result['distance'],
-        ]);
+        return response()->json(['action' => $result['action'], 'time' => $result['time']->timezone('Asia/Phnom_Penh')->format('d/m/Y H:i:s'), 'branch' => $result['branch']->name, 'distance' => $result['distance']]);
     }
 
     private function session(string $token, bool $lock = false): AttendanceQrSession
     {
         abort_unless(preg_match('/^[A-Za-z0-9]{80}$/', $token) === 1, 404);
-
-        $query = AttendanceQrSession::query()
-            ->with('branch')
-            ->where('token_hash', hash('sha256', $token));
-
+        $query = AttendanceQrSession::query()->with('branch')->where('token_hash', hash('sha256', $token));
         if ($lock) {
             $query->lockForUpdate();
         }
-
         $session = $query->firstOrFail();
         $grant = session('attendance_qr_grant.'.hash('sha256', $token));
         $hasGrant = is_numeric($grant) && (int) $grant >= now()->timestamp;
-
-        abort_unless(
-            ($session->isValid() || $hasGrant)
-                && $session->branch->is_active
-                && $session->branch->attendance_qr_enabled,
-            410,
-            'This QR code has expired.'
-        );
+        abort_unless(($session->isValid() || $hasGrant) && $session->branch->is_active && $session->branch->attendance_qr_enabled, 410, 'This QR code has expired.');
 
         return $session;
     }
