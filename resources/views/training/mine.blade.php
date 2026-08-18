@@ -1,105 +1,50 @@
 <x-layouts::app title="My Training & Courses">
-    <x-workspace-command-bar title="My Training & Certifications" icon="fa-book-open" context="Personal Workspace" />
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div><div class="small text-uppercase text-body-secondary fw-semibold">My workspace / Learning</div><h1 class="h5 mb-0 fw-bold text-dark">My training plan</h1></div>
+        <a class="btn btn-light btn-sm" href="{{ route('dashboard') }}"><i class="fa-solid fa-arrow-left me-1"></i>Workspace</a>
+    </div>
 
-    @if(session('status'))
-        <div class="alert alert-success d-flex align-items-center gap-2"><i class="fa-solid fa-circle-check"></i><span>{{ session('status') }}</span></div>
-    @endif
-    @if($errors->any())
-        <div class="alert alert-danger d-flex align-items-center gap-2"><i class="fa-solid fa-circle-exclamation"></i><span>{{ $errors->first() }}</span></div>
-    @endif
+    @if(session('status'))<div class="alert alert-success d-flex align-items-center gap-2"><i class="fa-solid fa-circle-check"></i><span>{{ session('status') }}</span></div>@endif
+    @if($errors->any())<div class="alert alert-danger d-flex align-items-center gap-2"><i class="fa-solid fa-circle-exclamation"></i><span>{{ $errors->first() }}</span></div>@endif
 
-    <div class="reference-list" data-list-container>
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th class="ps-3">Course</th>
-                        <th>Deadline</th>
-                        <th>Progress</th>
-                        <th>Score</th>
-                        <th>Status</th>
-                        <th class="text-end pe-3">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($enrollments as $enrollment)
-                        @php
-                            $isCompleted = $enrollment->status === 'completed';
-                        @endphp
-                        <tr>
-                            <td class="ps-3">
-                                <div class="fw-medium text-dark">{{ $enrollment->course?->title }}</div>
-                                @if($enrollment->course?->description)<small class="text-body-secondary">{{ \Illuminate\Support\Str::limit($enrollment->course->description, 60) }}</small>@endif
-                            </td>
-                            <td>{{ $enrollment->due_date?->format('d M Y') ?? 'Flexible' }}</td>
-                            <td>
-                                <div class="d-flex align-items-center gap-2" style="max-width: 150px;">
-                                    <div class="progress flex-grow-1" style="height: 6px;">
-                                        <div class="progress-bar bg-primary" role="progressbar" style="width: {{ max(0, min(100, $enrollment->progress)) }}%;"></div>
-                                    </div>
-                                    <span class="small fw-semibold">{{ $enrollment->progress }}%</span>
-                                </div>
-                            </td>
-                            <td>
-                                @if($enrollment->score !== null)
-                                    <span class="badge text-bg-dark"><i class="fa-solid fa-star text-warning me-1"></i>{{ $enrollment->score }}</span>
-                                @else
-                                    <span class="text-body-secondary small">—</span>
-                                @endif
-                            </td>
-                            <td>
-                                <span class="badge text-bg-{{ $isCompleted ? 'success' : 'primary' }}">{{ str($enrollment->status)->replace('_', ' ')->title() }}</span>
-                            </td>
-                            <td class="text-end pe-3 text-nowrap">
-                                @if(!$isCompleted)
-                                    <button class="btn btn-action-link btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#updateCourse{{ $enrollment->id }}">
-                                        <i class="fa-solid fa-pen"></i><span>Update progress</span>
-                                    </button>
-                                @else
-                                    <span class="small text-success"><i class="fa-solid fa-circle-check me-1"></i>Completed</span>
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td class="text-center text-body-secondary py-5" colspan="6">
-                                <i class="fa-solid fa-graduation-cap fa-xl d-block mb-3 text-primary"></i>No training courses assigned to you at this time.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-        <x-pagination-footer :paginator="$enrollments" />
+    @php
+        $items = collect($enrollments->items());
+        $completed = $items->where('status','completed')->count();
+        $active = $items->whereNotIn('status',['completed','cancelled'])->count();
+        $dueSoon = $items->filter(fn($item) => $item->due_date && $item->status !== 'completed' && $item->due_date->isBetween(today(), today()->addDays(7)))->count();
+    @endphp
+
+    <div class="row g-3 mb-3">
+        <div class="col-sm-4"><div class="profile-card mb-0"><div class="profile-card-body d-flex align-items-center gap-3"><span class="metric-icon bg-primary-subtle text-primary"><i class="fa-solid fa-book-open"></i></span><div><div class="small text-body-secondary">In progress</div><div class="fs-4 fw-bold">{{ $active }}</div></div></div></div></div>
+        <div class="col-sm-4"><div class="profile-card mb-0"><div class="profile-card-body d-flex align-items-center gap-3"><span class="metric-icon bg-warning-subtle text-warning"><i class="fa-regular fa-clock"></i></span><div><div class="small text-body-secondary">Due in 7 days</div><div class="fs-4 fw-bold">{{ $dueSoon }}</div></div></div></div></div>
+        <div class="col-sm-4"><div class="profile-card mb-0"><div class="profile-card-body d-flex align-items-center gap-3"><span class="metric-icon bg-success-subtle text-success"><i class="fa-solid fa-check"></i></span><div><div class="small text-body-secondary">Completed</div><div class="fs-4 fw-bold">{{ $completed }}</div></div></div></div></div>
+    </div>
+
+    <div class="row g-3" data-list-container>
+        @forelse($enrollments as $enrollment)
+            @php($isCompleted = $enrollment->status === 'completed')
+            <div class="col-md-6 col-xl-4">
+                <article class="profile-card h-100 mb-0 d-flex flex-column">
+                    <div class="profile-card-body flex-grow-1">
+                        <div class="d-flex align-items-start justify-content-between gap-3 mb-3"><span class="metric-icon {{ $isCompleted ? 'bg-success-subtle text-success' : 'bg-primary-subtle text-primary' }}"><i class="fa-solid {{ $isCompleted ? 'fa-award' : 'fa-book-open-reader' }}"></i></span><span class="status-text text-bg-{{ $isCompleted ? 'success' : 'primary' }}">{{ str($enrollment->status)->replace('_',' ')->title() }}</span></div>
+                        <h2 class="h6 fw-bold mb-2">{{ $enrollment->course?->title }}</h2>
+                        @if($enrollment->course?->description)<p class="small text-body-secondary">{{ \Illuminate\Support\Str::limit($enrollment->course->description,110) }}</p>@endif
+                        <div class="d-flex justify-content-between small mb-2"><span class="text-body-secondary">Progress</span><strong>{{ $enrollment->progress }}%</strong></div><div class="progress mb-3" style="height:6px"><div class="progress-bar {{ $isCompleted ? 'bg-success' : '' }}" style="width:{{ max(0,min(100,$enrollment->progress)) }}%"></div></div>
+                        <div class="profile-kv-row"><span class="profile-kv-label">Deadline</span><span class="profile-kv-value {{ $enrollment->due_date && !$isCompleted && $enrollment->due_date->isPast() ? 'text-danger' : '' }}">{{ $enrollment->due_date?->format('d M Y') ?? 'Flexible' }}</span></div>
+                        <div class="profile-kv-row"><span class="profile-kv-label">Score</span><span class="profile-kv-value">{{ $enrollment->score !== null ? number_format($enrollment->score,1).'%' : '—' }}</span></div>
+                    </div>
+                    <div class="card-footer bg-white d-flex justify-content-end">@if(!$isCompleted)<button class="btn btn-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#updateCourse{{ $enrollment->id }}"><i class="fa-solid fa-arrow-trend-up me-1"></i>Update progress</button>@else<span class="small text-success fw-semibold"><i class="fa-solid fa-circle-check me-1"></i>Learning completed</span>@endif</div>
+                </article>
+            </div>
+        @empty
+            <div class="col-12"><div class="profile-card"><div class="profile-card-body text-center text-body-secondary py-5"><i class="fa-solid fa-graduation-cap fa-xl d-block mb-3 text-primary"></i><h2 class="h6 fw-bold text-dark">No training assigned</h2><p class="small mb-0">Assigned learning programs will appear here.</p></div></div></div>
+        @endforelse
+        <div class="col-12"><x-pagination-footer :paginator="$enrollments" /></div>
     </div>
 
     @foreach($enrollments as $enrollment)
         @if($enrollment->status !== 'completed')
-            <div class="modal fade" id="updateCourse{{ $enrollment->id }}" tabindex="-1">
-                <div class="modal-dialog">
-                    <form class="modal-content" method="POST" action="{{ route('training.progress', $enrollment) }}">
-                        @csrf
-                        <div class="modal-header">
-                            <h2 class="modal-title fs-5">Update Training Progress · {{ $enrollment->course?->title }}</h2>
-                            <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label">Progress Percentage (0–100%) <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <input class="form-control" type="number" min="0" max="100" name="progress" value="{{ $enrollment->progress }}" required>
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Assessment Score (optional)</label>
-                                <input class="form-control" type="number" step=".01" min="0" max="100" name="score" value="{{ $enrollment->score }}" placeholder="e.g. 85.0">
-                            </div>
-                        </div>
-                        <x-form-save-actions save-label="Save progress" />
-                    </form>
-                </div>
-            </div>
+            <div class="modal fade" id="updateCourse{{ $enrollment->id }}" tabindex="-1"><div class="modal-dialog"><form class="modal-content" method="POST" action="{{ route('training.progress',$enrollment) }}">@csrf<div class="modal-header"><h2 class="modal-title fs-5">Update progress · {{ $enrollment->course?->title }}</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label">Progress <span class="text-danger">*</span></label><div class="input-group"><input class="form-control" type="number" min="0" max="100" name="progress" value="{{ $enrollment->progress }}" required><span class="input-group-text">%</span></div></div><div><label class="form-label">Assessment score</label><input class="form-control" type="number" step=".01" min="0" max="100" name="score" value="{{ $enrollment->score }}" placeholder="Optional"></div></div><x-form-save-actions save-label="Save progress" /></form></div></div>
         @endif
     @endforeach
 </x-layouts::app>
