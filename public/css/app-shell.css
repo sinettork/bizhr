@@ -231,7 +231,6 @@ html {
     position: relative;
     min-width: 0;
     min-height: calc(100dvh - var(--app-shell-topbar-height));
-    isolation: isolate;
 }
 
 /* Empty states are one centered visual unit: icon, title, helper text, then actions. */
