@@ -145,13 +145,7 @@
             </div>
         @empty
             <div class="card border-0 shadow-sm">
-                <div class="card-body py-5 text-center">
-                    <div class="rounded-circle bg-success-subtle text-success d-inline-flex align-items-center justify-content-center mb-3" style="width:52px;height:52px">
-                        <i class="fa-solid fa-check-double fa-lg"></i>
-                    </div>
-                    <h2 class="h6 fw-bold">No corrections waiting for review</h2>
-                    <p class="text-body-secondary small mb-0">The attendance correction queue is clear.</p>
-                </div>
+                <x-empty-state class="py-5 px-3" icon="fa-check-double" tone="success" title="No corrections waiting for review" message="The attendance correction queue is clear." />
             </div>
         @endforelse
 
