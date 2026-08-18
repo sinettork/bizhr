@@ -29,6 +29,8 @@ class EmployeeController extends Controller
     public function index(Request $request): View
     {
         $company = $this->company();
+        $branchId = $request->integer('branch');
+        $departmentId = $request->integer('department');
         $query = Employee::query()
             ->with(['branch:id,name', 'department:id,name', 'position:id,title'])
             ->where('company_id', $company->id);
@@ -50,22 +52,45 @@ class EmployeeController extends Controller
             });
         }
 
+        if ($branchId > 0) {
+            $query->where('branch_id', $branchId);
+        }
+
+        if ($departmentId > 0) {
+            $query->where('department_id', $departmentId);
+        }
+
         if ($request->filled('status')) {
             $query->where('employment_status', $request->string('status')->toString());
         }
 
         $employees = $query->orderBy('employee_code')->paginate($this->perPage($request, 20))->withQueryString();
-
-        if ($request->header('HX-Request')) {
-            return view('employees._table', compact('employees'));
-        }
-
-        return view('employees.index', [
+        $viewData = [
             'employees' => $employees,
             'search' => (string) $request->input('search', ''),
             'status' => (string) $request->input('status', ''),
             'statuses' => $this->statuses(),
-        ]);
+            'branchId' => $branchId,
+            'departmentId' => $departmentId,
+            'branches' => Branch::query()
+                ->where('company_id', $company->id)
+                ->where('is_active', true)
+                ->orderByDesc('is_head_office')
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'departments' => Department::query()
+                ->with('branch:id,name')
+                ->where('company_id', $company->id)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'branch_id', 'name']),
+        ];
+
+        if ($request->header('HX-Request')) {
+            return view('employees._list', $viewData);
+        }
+
+        return view('employees.index', $viewData);
     }
 
     public function create(): View
