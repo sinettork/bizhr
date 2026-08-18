@@ -1,35 +1,149 @@
-﻿<x-layouts::app title="Departments">
+<x-layouts::app title="Departments">
     <x-workspace-command-bar title="Departments" icon="fa-sitemap">
         <x-slot:filters>
             <form class="reference-filter-form" method="GET" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true">
-                <div class="input-group reference-search"><span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span><input class="form-control" name="search" value="{{ request('search') }}" placeholder="Search department or code" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="false" hx-trigger="keyup changed delay:500ms"></div>
-                <select class="form-select reference-status" name="branch_id" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change"><option value="">All branches</option>@foreach($branches as $branch)<option value="{{ $branch->id }}" @selected(request('branch_id') == $branch->id)>{{ $branch->name }}</option>@endforeach</select>
-                <select class="form-select reference-status" name="status" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change"><option value="">All statuses</option><option value="1" @selected(request('status') === '1')>Active</option><option value="0" @selected(request('status') === '0')>Inactive</option></select>
+                <div class="input-group reference-search">
+                    <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <input class="form-control" name="search" value="{{ request('search') }}" placeholder="Search department or code" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="false" hx-trigger="keyup changed delay:500ms">
+                </div>
+                <select class="form-select reference-status" name="branch_id" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
+                    <option value="">All branches</option>
+                    @foreach($branches as $branch)
+                        <option value="{{ $branch->id }}" @selected(request('branch_id') == $branch->id)>{{ $branch->name }}</option>
+                    @endforeach
+                </select>
+                <select class="form-select reference-status" name="status" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
+                    <option value="">All statuses</option>
+                    <option value="1" @selected(request('status') === '1')>Active</option>
+                    <option value="0" @selected(request('status') === '0')>Inactive</option>
+                </select>
                 <button class="btn btn-primary reference-search-button">Search</button>
             </form>
         </x-slot:filters>
-        <x-slot:actions><x-list-actions :add-target="auth()->user()->can('department.create') ? '#departmentForm' : null" add-label="Add department" /></x-slot:actions>
+        <x-slot:actions>
+            <x-list-actions :add-target="auth()->user()->can('department.create') ? '#departmentForm' : null" add-label="Add department" />
+        </x-slot:actions>
     </x-workspace-command-bar>
-    @if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
-    @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+
+    @if(session('status'))
+        <div class="alert alert-success">{{ session('status') }}</div>
+    @endif
+    @if($errors->any())
+        <div class="alert alert-danger">{{ $errors->first() }}</div>
+    @endif
 
     <div class="reference-list" data-list-container>
-        <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th class="ps-3">Department</th><th>Branch</th><th>Manager</th><th>Employees</th><th>Status</th><th class="text-end pe-3">Actions</th></tr></thead><tbody>
-            @forelse($departments as $department)
-                <tr><td class="ps-3"><div class="fw-medium">{{ $department->name }}</div><small class="text-body-secondary">{{ $department->code }}</small></td><td>{{ $department->branch?->name ?: 'Company-wide' }}</td><td>{{ $department->manager_name ?: '—' }}</td><td>{{ $department->employees_count }}</td><td><span class="badge text-bg-{{ $department->is_active ? 'success' : 'secondary' }}">{{ $department->is_active ? 'Active' : 'Inactive' }}</span></td><td class="text-end pe-3">
-                    @can('department.edit')<button class="btn btn-action-link btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#editDepartment{{ $department->id }}"><i class="fa-solid fa-pen"></i><span>Edit</span></button>@endcan
-                    @can('department.delete')<form class="d-inline" method="POST" action="{{ route('departments.destroy', $department) }}" data-confirm="Delete this department? Referenced departments cannot be deleted.">@csrf @method('DELETE')<button class="btn btn-action-link btn-sm text-danger" type="submit"><i class="fa-solid fa-trash"></i><span>Delete</span></button></form>@endcan
-                </td></tr>
-            @empty<tr><td class="text-center text-body-secondary py-5" colspan="6">No departments.</td></tr>@endforelse
-        </tbody></table></div><x-pagination-footer :paginator="$departments" />
+        @if($departments->count())
+            <div class="p-3 border-bottom bg-body-tertiary d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div>
+                    <div class="fw-semibold text-dark">Organization structure</div>
+                    <div class="small text-body-secondary">Departments are grouped by branch so reporting lines and workforce distribution are easier to scan.</div>
+                </div>
+                <span class="badge text-bg-light border text-dark">{{ number_format($departments->total()) }} total</span>
+            </div>
+
+            @php
+                $departmentGroups = $departments->getCollection()->groupBy(fn ($department) => $department->branch?->name ?: 'Company-wide');
+            @endphp
+
+            <div class="p-3">
+                @foreach($departmentGroups as $branchName => $group)
+                    <section class="mb-4 last-child-mb-0">
+                        <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="page-icon" style="width:34px;height:34px;font-size:.8rem;"><i class="fa-solid fa-building"></i></span>
+                                <div>
+                                    <h2 class="h6 mb-0">{{ $branchName }}</h2>
+                                    <div class="small text-body-secondary">{{ $group->count() }} department{{ $group->count() === 1 ? '' : 's' }} on this page</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-2">
+                            @foreach($group as $department)
+                                <div class="col-12 col-lg-6">
+                                    <article class="card h-100 shadow-none">
+                                        <div class="card-body p-3">
+                                            <div class="d-flex align-items-start justify-content-between gap-3">
+                                                <div class="min-w-0">
+                                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                                        <h3 class="h6 mb-0 text-dark">{{ $department->name }}</h3>
+                                                        <span class="badge text-bg-{{ $department->is_active ? 'success' : 'secondary' }}">{{ $department->is_active ? 'Active' : 'Inactive' }}</span>
+                                                    </div>
+                                                    <div class="small text-body-secondary mt-1">{{ $department->code ?: 'No department code' }}</div>
+                                                </div>
+                                                <div class="dropdown flex-shrink-0">
+                                                    <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Department actions"><i class="fa-solid fa-ellipsis"></i></button>
+                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                        @can('department.edit')
+                                                            <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editDepartment{{ $department->id }}"><i class="fa-solid fa-pen me-2"></i>Edit department</button></li>
+                                                        @endcan
+                                                        @can('department.delete')
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li>
+                                                                <form method="POST" action="{{ route('departments.destroy', $department) }}" data-confirm="Delete this department? Referenced departments cannot be deleted.">
+                                                                    @csrf @method('DELETE')
+                                                                    <button class="dropdown-item text-danger" type="submit"><i class="fa-solid fa-trash me-2"></i>Delete department</button>
+                                                                </form>
+                                                            </li>
+                                                        @endcan
+                                                    </ul>
+                                                </div>
+                                            </div>
+
+                                            <div class="row g-3 mt-1 small">
+                                                <div class="col-7">
+                                                    <div class="text-body-secondary mb-1">Manager</div>
+                                                    <div class="fw-medium text-dark text-truncate">{{ $department->manager_name ?: 'Not assigned' }}</div>
+                                                </div>
+                                                <div class="col-5 text-end">
+                                                    <div class="text-body-secondary mb-1">Employees</div>
+                                                    <div class="fw-semibold text-dark">{{ number_format($department->employees_count) }}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </article>
+                                </div>
+                            @endforeach
+                        </div>
+                    </section>
+                @endforeach
+            </div>
+            <x-pagination-footer :paginator="$departments" />
+        @else
+            <div class="empty-state py-5 px-3">
+                <i class="fa-solid fa-sitemap fa-2xl d-block mb-3 text-primary"></i>
+                <h2 class="h6 mb-1">No departments found</h2>
+                <p class="text-body-secondary mb-0">Adjust the branch or status filters, or add a department to build your organization structure.</p>
+            </div>
+        @endif
     </div>
 
     @can('department.create')
-        <div class="modal fade" id="departmentForm" tabindex="-1"><div class="modal-dialog"><form class="modal-content" method="POST" action="{{ route('departments.store') }}">@csrf<div class="modal-header"><h2 class="modal-title fs-5">Add department</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div><div class="modal-body"><x-department-fields :branches="$branches" /><label class="form-check"><input class="form-check-input" type="checkbox" name="is_active" value="1" checked><span class="form-check-label">Active</span></label></div><x-form-save-actions :allow-save-new="true" save-label="Save & close" new-label="Save & new" /></form></div></div>
+        <div class="modal fade" id="departmentForm" tabindex="-1">
+            <div class="modal-dialog">
+                <form class="modal-content" method="POST" action="{{ route('departments.store') }}">
+                    @csrf
+                    <div class="modal-header"><h2 class="modal-title fs-5">Add department</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-body"><x-department-fields :branches="$branches" /><label class="form-check"><input class="form-check-input" type="checkbox" name="is_active" value="1" checked><span class="form-check-label">Active</span></label></div>
+                    <x-form-save-actions :allow-save-new="true" save-label="Save & close" new-label="Save & new" />
+                </form>
+            </div>
+        </div>
     @endcan
+
     @can('department.edit')
         @foreach($departments as $department)
-            <div class="modal fade" id="editDepartment{{ $department->id }}" tabindex="-1"><div class="modal-dialog"><form class="modal-content" method="POST" action="{{ route('departments.update', $department) }}">@csrf @method('PUT')<div class="modal-header"><h2 class="modal-title fs-5">Edit department</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div><div class="modal-body"><x-department-fields :branches="$branches" :department="$department" /><label class="form-check"><input class="form-check-input" type="checkbox" name="is_active" value="1" @checked($department->is_active)><span class="form-check-label">Active</span></label></div><x-form-save-actions save-label="Save & close" /></form></div></div>
+            <div class="modal fade" id="editDepartment{{ $department->id }}" tabindex="-1">
+                <div class="modal-dialog">
+                    <form class="modal-content" method="POST" action="{{ route('departments.update', $department) }}">
+                        @csrf @method('PUT')
+                        <div class="modal-header"><h2 class="modal-title fs-5">Edit department</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div>
+                        <div class="modal-body"><x-department-fields :branches="$branches" :department="$department" /><label class="form-check"><input class="form-check-input" type="checkbox" name="is_active" value="1" @checked($department->is_active)><span class="form-check-label">Active</span></label></div>
+                        <x-form-save-actions save-label="Save & close" />
+                    </form>
+                </div>
+            </div>
         @endforeach
     @endcan
 </x-layouts::app>
