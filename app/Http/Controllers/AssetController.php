@@ -7,10 +7,13 @@ use App\Models\AssetAssignment;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Services\AssetWorkflowService;
+use App\Services\UploadedFileSecurityService;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -25,16 +28,22 @@ class AssetController extends Controller
         return view('assets.index', ['assets' => $assets, 'employees' => Employee::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('full_name_en')->get()]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, UploadedFileSecurityService $fileSecurity): RedirectResponse
     {
         $data = $this->validated($request);
+        $image = $request->file('image');
+        if ($image instanceof UploadedFile) {
+            $fileSecurity->assertSafe($image, 'image');
+            $data['image_path'] = $image->store('assets/'.$this->companyId(), 'public');
+        }
+
         Asset::query()->create(['company_id' => $this->companyId(), ...$data]);
         $response = back()->with('status', 'Asset created.');
 
         return $request->input('save_action') === 'new' ? $response->with('open_modal', 'createAsset') : $response;
     }
 
-    public function update(Request $request, Asset $asset): RedirectResponse
+    public function update(Request $request, Asset $asset, UploadedFileSecurityService $fileSecurity): RedirectResponse
     {
         abort_unless($asset->company_id === $this->companyId(), 404);
         Gate::forUser($request->user())->authorize('manage', $asset);
@@ -42,7 +51,28 @@ class AssetController extends Controller
         if ($asset->status === 'assigned') {
             unset($data['condition']);
         }
-        $asset->update($data);
+
+        $image = $request->file('image');
+        $newImagePath = null;
+        if ($image instanceof UploadedFile) {
+            $fileSecurity->assertSafe($image, 'image');
+            $newImagePath = $image->store('assets/'.$this->companyId(), 'public');
+            $data['image_path'] = $newImagePath;
+        }
+
+        $previousImagePath = $asset->image_path;
+        try {
+            $asset->update($data);
+        } catch (\Throwable $exception) {
+            if ($newImagePath !== null) {
+                Storage::disk('public')->delete($newImagePath);
+            }
+            throw $exception;
+        }
+
+        if ($newImagePath !== null && $previousImagePath && $previousImagePath !== $newImagePath) {
+            Storage::disk('public')->delete($previousImagePath);
+        }
 
         return back()->with('status', 'Asset updated.');
     }
@@ -76,7 +106,8 @@ class AssetController extends Controller
         abort_unless($assignment->asset()->where('company_id', $this->companyId())->exists(), 404);
         if (! $request->user()->can('asset.manage')) {
             abort_unless($assignment->employee_id === $request->user()->employee?->id, 403);
-        } $data = $request->validate(['condition_in' => ['required', 'in:new,good,fair,poor,lost,retired'], 'notes' => ['nullable', 'string', 'max:2000']]);
+        }
+        $data = $request->validate(['condition_in' => ['required', 'in:new,good,fair,poor,lost,retired'], 'notes' => ['nullable', 'string', 'max:2000']]);
         $this->runWorkflow(fn () => $workflow->receive($assignment, $request->user(), $data['condition_in'], $data['notes'] ?? null));
 
         return back()->with('status', 'Asset return recorded.');
@@ -97,7 +128,21 @@ class AssetController extends Controller
     /** @return array<string, mixed> */
     private function validated(Request $request, ?Asset $asset = null): array
     {
-        return $request->validate(['asset_code' => ['required', 'string', 'max:80', Rule::unique('assets')->where('company_id', $this->companyId())->ignore($asset)], 'name' => ['required', 'string', 'max:200'], 'category' => ['required', 'string', 'max:100'], 'serial_number' => ['nullable', 'string', 'max:150', Rule::unique('assets')->where('company_id', $this->companyId())->ignore($asset)], 'purchase_date' => ['nullable', 'date'], 'purchase_cost' => ['nullable', 'numeric', 'min:0'], 'currency' => ['required', 'in:USD,KHR'], 'condition' => ['required', 'in:new,good,fair,poor'], 'notes' => ['nullable', 'string', 'max:2000']]);
+        $data = $request->validate([
+            'asset_code' => ['required', 'string', 'max:80', Rule::unique('assets')->where('company_id', $this->companyId())->ignore($asset)],
+            'name' => ['required', 'string', 'max:200'],
+            'category' => ['required', 'string', 'max:100'],
+            'serial_number' => ['nullable', 'string', 'max:150', Rule::unique('assets')->where('company_id', $this->companyId())->ignore($asset)],
+            'purchase_date' => ['nullable', 'date'],
+            'purchase_cost' => ['nullable', 'numeric', 'min:0'],
+            'currency' => ['required', 'in:USD,KHR'],
+            'condition' => ['required', 'in:new,good,fair,poor'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:max_width=2400,max_height=2400'],
+        ]);
+        unset($data['image']);
+
+        return $data;
     }
 
     /** @param callable(): mixed $operation */
