@@ -59,25 +59,14 @@
                                         </div>
                                     </div>
 
-                                    <div class="dropdown flex-shrink-0">
-                                        <button class="btn btn-action-link btn-sm px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Branch actions">
-                                            <i class="fa-solid fa-ellipsis-vertical"></i>
-                                        </button>
-                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm p-1" style="min-width:150px;font-size:.76rem;">
-                                            @can('branch.edit')
-                                                <li><button class="dropdown-item rounded-1 px-2 py-1" type="button" data-bs-toggle="modal" data-bs-target="#editBranch{{ $branch->id }}"><i class="fa-solid fa-pen me-2"></i>Edit</button></li>
-                                            @endcan
-                                            @can('branch.delete')
-                                                <li><hr class="dropdown-divider my-1"></li>
-                                                <li>
-                                                    <form method="POST" action="{{ route('branches.destroy',$branch) }}" data-confirm="Delete this unreferenced branch?">
-                                                        @csrf @method('DELETE')
-                                                        <button class="dropdown-item rounded-1 px-2 py-1 text-danger" type="submit"><i class="fa-solid fa-trash me-2"></i>Delete</button>
-                                                    </form>
-                                                </li>
-                                            @endcan
-                                        </ul>
-                                    </div>
+                                    <x-entity-action-menu
+                                        :can-edit="auth()->user()->can('branch.edit')"
+                                        :can-delete="auth()->user()->can('branch.delete')"
+                                        edit-target="#editBranch{{ $branch->id }}"
+                                        :delete-url="route('branches.destroy', $branch)"
+                                        delete-confirm="Delete this unreferenced branch?"
+                                        aria-label="Actions for {{ $branch->name }}"
+                                    />
                                 </div>
 
                                 <hr class="my-3">
