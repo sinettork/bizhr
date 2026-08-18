@@ -89,25 +89,30 @@
                                                 @endif
                                             </div>
 
-                                            <div class="dropdown flex-shrink-0">
-                                                <button class="btn btn-action-link btn-sm px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Asset actions"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-                                                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                                                    @can('asset.manage')
-                                                        @if($asset->status === 'available')
-                                                            <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#assign{{ $asset->id }}"><i class="fa-solid fa-user-plus me-2"></i>Assign asset</button></li>
-                                                        @endif
-                                                        <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editAsset{{ $asset->id }}"><i class="fa-solid fa-pen me-2"></i>Edit asset</button></li>
-                                                        @if($asset->status !== 'assigned')
-                                                            <li><hr class="dropdown-divider"></li>
-                                                            <li><form method="POST" action="{{ route('assets.destroy',$asset) }}" data-confirm="Archive this asset from active inventory?">@csrf @method('DELETE')<button class="dropdown-item text-danger" type="submit"><i class="fa-solid fa-box-archive me-2"></i>Archive asset</button></form></li>
-                                                        @endif
-                                                    @endcan
-                                                </ul>
-                                            </div>
+                                            @can('asset.manage')
+                                                <x-entity-action-menu
+                                                    :can-edit="true"
+                                                    :can-delete="$asset->status !== 'assigned'"
+                                                    edit-target="#editAsset{{ $asset->id }}"
+                                                    :delete-url="$asset->status !== 'assigned' ? route('assets.destroy', $asset) : null"
+                                                    delete-label="Archive"
+                                                    delete-icon="fa-box-archive"
+                                                    delete-confirm="Archive this asset from active inventory?"
+                                                    aria-label="Actions for {{ $asset->name }}"
+                                                >
+                                                    @if($asset->status === 'available')
+                                                        <li>
+                                                            <button class="dropdown-item rounded-1 px-2 py-1" type="button" data-bs-toggle="modal" data-bs-target="#assign{{ $asset->id }}">
+                                                                <i class="fa-solid fa-user-plus me-2"></i>Assign
+                                                            </button>
+                                                        </li>
+                                                    @endif
+                                                </x-entity-action-menu>
+                                            @endcan
                                         </div>
 
                                         <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
-                                            <span class="badge text-bg-{{ $statusTone }}">{{ str($asset->status)->title() }}</span>
+                                            <span class="status-text text-bg-{{ $statusTone }}">{{ str($asset->status)->title() }}</span>
                                             <span class="small text-body-secondary">{{ $asset->category }}</span>
                                         </div>
                                     </div>
@@ -130,11 +135,7 @@
             </div>
             <x-pagination-footer :paginator="$assets" />
         @else
-            <div class="empty-state py-5 px-3">
-                <i class="fa-solid fa-boxes-stacked fa-2xl d-block mb-3 text-primary"></i>
-                <h2 class="h6 mb-1">No assets found</h2>
-                <p class="text-body-secondary mb-0">Adjust the search, category or status filter, or register the first asset.</p>
-            </div>
+            <x-empty-state class="py-5 px-3" icon="fa-boxes-stacked" title="No assets found" message="Adjust the search, category or status filter, or register the first asset." />
         @endif
     </div>
 
