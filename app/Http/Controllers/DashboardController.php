@@ -75,9 +75,18 @@ class DashboardController extends Controller
             $metrics['pendingCorrections'] = AttendanceCorrection::query()->where('status', 'pending')->whereHas('employee', $scopeEmployees)->count();
         }
 
+        $myAttendance = null;
+        $mySchedule = null;
+        $myTasks = collect();
+        $myUpcomingLeave = collect();
+
         if ($employee) {
             $metrics['openTasks'] = Task::query()->where('assigned_to', $employee->id)->whereNotIn('status', ['verified', 'cancelled'])->count();
             $metrics['leaveBalance'] = LeaveBalance::query()->where('employee_id', $employee->id)->sum('remaining_days');
+            $myAttendance = Attendance::query()->where('employee_id', $employee->id)->whereDate('work_date', today())->first();
+            $mySchedule = EmployeeSchedule::query()->with('workShift')->where('employee_id', $employee->id)->whereDate('work_date', today())->first();
+            $myTasks = Task::query()->where('assigned_to', $employee->id)->whereNotIn('status', ['verified', 'cancelled'])->orderBy('due_date')->limit(5)->get();
+            $myUpcomingLeave = LeaveRequest::query()->with('leaveType')->where('employee_id', $employee->id)->whereIn('status', ['pending', 'manager_approved', 'approved'])->whereDate('end_date', '>=', today())->orderBy('start_date')->limit(3)->get();
         }
 
         if ($user->can('payroll.view') && $companyId) {
@@ -100,6 +109,16 @@ class DashboardController extends Controller
             ? $user->hasAnyPermission($item['permission'])
             : $user->can($item['permission']));
 
-        return view('dashboard.index', compact('metrics', 'recentAttendances', 'isManagerOrAdmin', 'actionItems'));
+        return view('dashboard.index', compact(
+            'metrics',
+            'recentAttendances',
+            'isManagerOrAdmin',
+            'actionItems',
+            'employee',
+            'myAttendance',
+            'mySchedule',
+            'myTasks',
+            'myUpcomingLeave',
+        ));
     }
 }
