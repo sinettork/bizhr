@@ -80,9 +80,8 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="py-5 text-center text-body-secondary">
-                                <i class="fa-regular fa-calendar-xmark fa-xl d-block mb-3 text-primary"></i>
-                                No attendance records logged for {{ $date->format('d M Y') }}.
+                            <td colspan="7" class="p-0">
+                                <x-empty-state class="py-5 px-3" icon="fa-calendar-xmark" title="No attendance records" :message="'No attendance records logged for '.$date->format('d M Y').'.'" />
                             </td>
                         </tr>
                     @endforelse
