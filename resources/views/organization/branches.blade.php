@@ -1,16 +1,167 @@
-﻿<x-layouts::app title="Branches">
+<x-layouts::app title="Branches">
     <x-workspace-command-bar title="Branches" icon="fa-code-branch">
-        <x-slot:filters><form class="reference-filter-form" method="GET" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true"><div class="input-group reference-search"><span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span><input class="form-control" name="search" value="{{ request('search') }}" placeholder="Search branch, code or city" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="false" hx-trigger="keyup changed delay:500ms"></div><select class="form-select reference-status" name="status" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change"><option value="">All statuses</option><option value="1" @selected(request('status') === '1')>Active</option><option value="0" @selected(request('status') === '0')>Inactive</option></select><button class="btn btn-primary reference-search-button">Search</button></form></x-slot:filters>
-        <x-slot:actions><x-list-actions :add-target="auth()->user()->can('branch.create') ? '#branchForm' : null" add-label="Add branch" /></x-slot:actions>
+        <x-slot:filters>
+            <form class="reference-filter-form" method="GET" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true">
+                <div class="input-group reference-search">
+                    <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <input class="form-control" name="search" value="{{ request('search') }}" placeholder="Search branch, code or city" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="false" hx-trigger="keyup changed delay:500ms">
+                </div>
+                <select class="form-select reference-status" name="status" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
+                    <option value="">All statuses</option>
+                    <option value="1" @selected(request('status') === '1')>Active</option>
+                    <option value="0" @selected(request('status') === '0')>Inactive</option>
+                </select>
+                <button class="btn btn-primary reference-search-button">Search</button>
+            </form>
+        </x-slot:filters>
+        <x-slot:actions>
+            <x-list-actions :add-target="auth()->user()->can('branch.create') ? '#branchForm' : null" add-label="Add branch" />
+        </x-slot:actions>
     </x-workspace-command-bar>
-    @if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
-    @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
-    <div class="reference-list" data-list-container><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th class="ps-3">Branch</th><th>Manager</th><th>Contact</th><th>Employees</th><th>Status</th><th class="text-end pe-3">Actions</th></tr></thead><tbody>
-        @forelse($branches as $branch)<tr><td class="ps-3"><div class="fw-medium">{{ $branch->name }}</div><small class="text-body-secondary">{{ $branch->code }} · {{ $branch->city }}</small></td><td>{{ $branch->manager_name ?: '—' }}</td><td>{{ $branch->phone ?: $branch->email ?: '—' }}</td><td>{{ $branch->employees_count }}</td><td>@if($branch->is_head_office)<span class="badge text-bg-primary">Head office</span>@endif <span class="badge text-bg-{{ $branch->is_active ? 'success' : 'secondary' }}">{{ $branch->is_active ? 'Active' : 'Inactive' }}</span></td><td class="text-end pe-3">@can('branch.edit')<button class="btn btn-action-link btn-sm" data-bs-toggle="modal" data-bs-target="#editBranch{{ $branch->id }}"><i class="fa-solid fa-pen"></i><span>Edit</span></button>@endcan @can('branch.delete')<form class="d-inline" method="POST" action="{{ route('branches.destroy',$branch) }}" onsubmit="return confirm('Delete this unreferenced branch?')">@csrf @method('DELETE')<button class="btn btn-action-link btn-sm text-danger"><i class="fa-solid fa-trash"></i><span>Delete</span></button></form>@endcan</td></tr>
-        @empty<tr><td class="text-center text-body-secondary py-5" colspan="6">No branches.</td></tr>@endforelse
-    </tbody></table></div><x-pagination-footer :paginator="$branches" /></div>
-    @can('branch.create')<div class="modal fade" id="branchForm" tabindex="-1"><div class="modal-dialog modal-lg"><form class="modal-content" method="POST" action="{{ route('branches.store') }}">@csrf<div class="modal-header"><h2 class="modal-title fs-5">Add branch</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="row g-3"><div class="col-md-6"><label class="form-label">Name <span class="text-danger">*</span></label><input class="form-control" name="name" required></div><div class="col-md-6"><label class="form-label">Code</label><input class="form-control" name="code" placeholder="auto-generate"></div><div class="col-md-6"><label class="form-label">Manager</label><input class="form-control" name="manager_name"></div><div class="col-md-6"><label class="form-label">City</label><input class="form-control" name="city"></div><div class="col-md-6"><label class="form-label">Phone</label><input class="form-control" name="phone"></div><div class="col-md-6"><label class="form-label">Email</label><input class="form-control" type="email" name="email"></div><div class="col-12"><label class="form-label">Address</label><textarea class="form-control" name="address"></textarea></div><div class="col-12"><label class="form-check"><input class="form-check-input" type="checkbox" name="is_head_office" value="1"><span class="form-check-label">Head office</span></label><label class="form-check"><input class="form-check-input" type="checkbox" name="is_active" value="1" checked><span class="form-check-label">Active</span></label></div></div></div><x-form-save-actions :allow-save-new="true" save-label="Save & close" new-label="Save & new" /></form></div></div>@endcan
+
+    @if(session('status'))
+        <div class="alert alert-success">{{ session('status') }}</div>
+    @endif
+    @if($errors->any())
+        <div class="alert alert-danger">{{ $errors->first() }}</div>
+    @endif
+
+    <div class="reference-list" data-list-container>
+        @if($branches->count())
+            <div class="p-3 border-bottom bg-body-tertiary d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div>
+                    <div class="fw-semibold text-dark">Branch network</div>
+                    <div class="small text-body-secondary">Compare locations by workforce, departments, manager and operating status.</div>
+                </div>
+                <span class="badge text-bg-light border text-dark">{{ number_format($branches->total()) }} total</span>
+            </div>
+
+            <div class="row g-3 p-3">
+                @foreach($branches as $branch)
+                    <div class="col-12 col-xl-6">
+                        <article class="card h-100 shadow-none">
+                            <div class="card-body">
+                                <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+                                    <div class="d-flex align-items-start gap-3 min-w-0">
+                                        <div class="page-icon flex-shrink-0"><i class="fa-solid fa-building"></i></div>
+                                        <div class="min-w-0">
+                                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                                <h2 class="h6 mb-0 text-dark">{{ $branch->name }}</h2>
+                                                @if($branch->is_head_office)
+                                                    <span class="badge text-bg-primary">Head office</span>
+                                                @endif
+                                                <span class="badge text-bg-{{ $branch->is_active ? 'success' : 'secondary' }}">{{ $branch->is_active ? 'Active' : 'Inactive' }}</span>
+                                            </div>
+                                            <div class="small text-body-secondary mt-1">{{ $branch->code }}{{ $branch->city ? ' · '.$branch->city : '' }}</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Branch actions">
+                                            <i class="fa-solid fa-ellipsis"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            @can('branch.edit')
+                                                <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editBranch{{ $branch->id }}"><i class="fa-solid fa-pen me-2"></i>Edit branch</button></li>
+                                            @endcan
+                                            @can('branch.delete')
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li>
+                                                    <form method="POST" action="{{ route('branches.destroy',$branch) }}" onsubmit="return confirm('Delete this unreferenced branch?')">
+                                                        @csrf @method('DELETE')
+                                                        <button class="dropdown-item text-danger" type="submit"><i class="fa-solid fa-trash me-2"></i>Delete branch</button>
+                                                    </form>
+                                                </li>
+                                            @endcan
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <div class="workspace-summary-item h-100">
+                                            <div class="label">Employees</div>
+                                            <div class="value">{{ number_format($branch->employees_count) }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="workspace-summary-item h-100">
+                                            <div class="label">Departments</div>
+                                            <div class="value">{{ number_format($branch->departments_count) }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row g-3 small">
+                                    <div class="col-md-6">
+                                        <div class="text-body-secondary mb-1">Manager</div>
+                                        <div class="fw-medium text-dark">{{ $branch->manager_name ?: 'Not assigned' }}</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="text-body-secondary mb-1">Primary contact</div>
+                                        <div class="fw-medium text-dark text-break">{{ $branch->phone ?: $branch->email ?: 'Not provided' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                @endforeach
+            </div>
+            <x-pagination-footer :paginator="$branches" />
+        @else
+            <div class="empty-state py-5 px-3">
+                <i class="fa-solid fa-building-circle-xmark fa-2xl d-block mb-3 text-primary"></i>
+                <h2 class="h6 mb-1">No branches found</h2>
+                <p class="text-body-secondary mb-0">Try a different search or status filter, or add the first branch.</p>
+            </div>
+        @endif
+    </div>
+
+    @can('branch.create')
+        <div class="modal fade" id="branchForm" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <form class="modal-content" method="POST" action="{{ route('branches.store') }}">
+                    @csrf
+                    <div class="modal-header"><h2 class="modal-title fs-5">Add branch</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6"><label class="form-label">Name <span class="text-danger">*</span></label><input class="form-control" name="name" required></div>
+                            <div class="col-md-6"><label class="form-label">Code</label><input class="form-control" name="code" placeholder="auto-generate"></div>
+                            <div class="col-md-6"><label class="form-label">Manager</label><input class="form-control" name="manager_name"></div>
+                            <div class="col-md-6"><label class="form-label">City</label><input class="form-control" name="city"></div>
+                            <div class="col-md-6"><label class="form-label">Phone</label><input class="form-control" name="phone"></div>
+                            <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" type="email" name="email"></div>
+                            <div class="col-12"><label class="form-label">Address</label><textarea class="form-control" name="address"></textarea></div>
+                            <div class="col-12">
+                                <label class="form-check"><input class="form-check-input" type="checkbox" name="is_head_office" value="1"><span class="form-check-label">Head office</span></label>
+                                <label class="form-check"><input class="form-check-input" type="checkbox" name="is_active" value="1" checked><span class="form-check-label">Active</span></label>
+                            </div>
+                        </div>
+                    </div>
+                    <x-form-save-actions :allow-save-new="true" save-label="Save & close" new-label="Save & new" />
+                </form>
+            </div>
+        </div>
+    @endcan
+
     @can('branch.edit')
-        @foreach($branches as $branch)<div class="modal fade" id="editBranch{{ $branch->id }}" tabindex="-1"><div class="modal-dialog"><form class="modal-content" method="POST" action="{{ route('branches.update',$branch) }}">@csrf @method('PUT')<div class="modal-header"><h2 class="modal-title fs-5">Edit branch</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="form-label">Name</label><input class="form-control mb-3" name="name" value="{{ $branch->name }}" required><label class="form-label">Code</label><input class="form-control mb-3" name="code" value="{{ $branch->code }}" placeholder="auto-generate"><label class="form-label">Manager</label><input class="form-control mb-3" name="manager_name" value="{{ $branch->manager_name }}"><label class="form-check"><input class="form-check-input" type="checkbox" name="is_head_office" value="1" @checked($branch->is_head_office)><span class="form-check-label">Head office</span></label><label class="form-check"><input class="form-check-input" type="checkbox" name="is_active" value="1" @checked($branch->is_active)><span class="form-check-label">Active</span></label></div><x-form-save-actions save-label="Save & close" /></form></div></div>@endforeach
+        @foreach($branches as $branch)
+            <div class="modal fade" id="editBranch{{ $branch->id }}" tabindex="-1">
+                <div class="modal-dialog">
+                    <form class="modal-content" method="POST" action="{{ route('branches.update',$branch) }}">
+                        @csrf @method('PUT')
+                        <div class="modal-header"><h2 class="modal-title fs-5">Edit branch</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div>
+                        <div class="modal-body">
+                            <label class="form-label">Name</label><input class="form-control mb-3" name="name" value="{{ $branch->name }}" required>
+                            <label class="form-label">Code</label><input class="form-control mb-3" name="code" value="{{ $branch->code }}" placeholder="auto-generate">
+                            <label class="form-label">Manager</label><input class="form-control mb-3" name="manager_name" value="{{ $branch->manager_name }}">
+                            <label class="form-check"><input class="form-check-input" type="checkbox" name="is_head_office" value="1" @checked($branch->is_head_office)><span class="form-check-label">Head office</span></label>
+                            <label class="form-check"><input class="form-check-input" type="checkbox" name="is_active" value="1" @checked($branch->is_active)><span class="form-check-label">Active</span></label>
+                        </div>
+                        <x-form-save-actions save-label="Save & close" />
+                    </form>
+                </div>
+            </div>
+        @endforeach
     @endcan
 </x-layouts::app>
