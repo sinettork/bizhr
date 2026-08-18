@@ -28,22 +28,22 @@
 
     <div class="reference-list" data-list-container>
         @if($branches->count())
-            <div class="p-3 border-bottom bg-body-tertiary d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div class="px-3 py-2 border-bottom bg-body-tertiary d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div>
                     <div class="fw-semibold text-dark">Branch network</div>
-                    <div class="small text-body-secondary">Compare locations by workforce, departments, manager and operating status.</div>
+                    <div class="small text-body-secondary">Locations, workforce and operating contacts.</div>
                 </div>
                 <span class="badge text-bg-light border text-dark">{{ number_format($branches->total()) }} total</span>
             </div>
 
-            <div class="row g-3 p-3">
+            <div class="row g-2 p-3">
                 @foreach($branches as $branch)
                     <div class="col-12 col-xl-6">
                         <article class="card h-100 shadow-none">
-                            <div class="card-body">
-                                <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
-                                    <div class="d-flex align-items-start gap-3 min-w-0">
-                                        <div class="page-icon flex-shrink-0"><i class="fa-solid fa-building"></i></div>
+                            <div class="card-body p-3">
+                                <div class="d-flex align-items-start justify-content-between gap-2">
+                                    <div class="d-flex align-items-start gap-2 min-w-0">
+                                        <div class="page-icon flex-shrink-0" style="width:2.25rem;height:2.25rem;"><i class="fa-solid fa-building"></i></div>
                                         <div class="min-w-0">
                                             <div class="d-flex flex-wrap align-items-center gap-2">
                                                 <h2 class="h6 mb-0 text-dark">{{ $branch->name }}</h2>
@@ -77,29 +77,27 @@
                                     </div>
                                 </div>
 
-                                <div class="row g-2 mb-3">
-                                    <div class="col-6">
-                                        <div class="workspace-summary-item h-100">
-                                            <div class="label">Employees</div>
-                                            <div class="value">{{ number_format($branch->employees_count) }}</div>
-                                        </div>
+                                <div class="d-flex flex-wrap align-items-center gap-x-4 gap-2 mt-3 pt-2 border-top small">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="fa-solid fa-users text-body-secondary"></i>
+                                        <span class="text-body-secondary">Employees</span>
+                                        <strong class="text-dark">{{ number_format($branch->employees_count) }}</strong>
                                     </div>
-                                    <div class="col-6">
-                                        <div class="workspace-summary-item h-100">
-                                            <div class="label">Departments</div>
-                                            <div class="value">{{ number_format($branch->departments_count) }}</div>
-                                        </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="fa-solid fa-sitemap text-body-secondary"></i>
+                                        <span class="text-body-secondary">Departments</span>
+                                        <strong class="text-dark">{{ number_format($branch->departments_count) }}</strong>
                                     </div>
                                 </div>
 
-                                <div class="row g-3 small">
-                                    <div class="col-md-6">
-                                        <div class="text-body-secondary mb-1">Manager</div>
-                                        <div class="fw-medium text-dark">{{ $branch->manager_name ?: 'Not assigned' }}</div>
+                                <div class="row g-2 mt-1 small">
+                                    <div class="col-sm-6">
+                                        <span class="text-body-secondary">Manager</span>
+                                        <span class="fw-medium text-dark ms-1">{{ $branch->manager_name ?: 'Not assigned' }}</span>
                                     </div>
-                                    <div class="col-md-6">
-                                        <div class="text-body-secondary mb-1">Primary contact</div>
-                                        <div class="fw-medium text-dark text-break">{{ $branch->phone ?: $branch->email ?: 'Not provided' }}</div>
+                                    <div class="col-sm-6 text-sm-end">
+                                        <span class="text-body-secondary">Contact</span>
+                                        <span class="fw-medium text-dark ms-1 text-break">{{ $branch->phone ?: $branch->email ?: 'Not provided' }}</span>
                                     </div>
                                 </div>
                             </div>
