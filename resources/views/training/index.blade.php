@@ -34,7 +34,7 @@
                 </article>
             </div>
         @empty
-            <div class="col-12"><div class="profile-card mb-0"><div class="profile-card-body py-5 text-center text-body-secondary"><i class="fa-solid fa-graduation-cap fa-xl d-block mb-3 text-primary"></i>No training courses found.</div></div></div>
+            <div class="col-12"><div class="profile-card mb-0"><x-empty-state class="py-5 px-3" icon="fa-graduation-cap" title="No training courses" message="Training programs will appear here when they are created." /></div></div>
         @endforelse
         <div class="col-12"><x-pagination-footer :paginator="$courses" /></div>
     </div>
