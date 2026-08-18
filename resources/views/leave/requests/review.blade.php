@@ -15,65 +15,81 @@
     @endif
 
     <div class="reference-list" data-list-container>
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th class="ps-3">Employee</th>
-                        <th>Leave Type</th>
-                        <th>Dates & Duration</th>
-                        <th>Reason</th>
-                        <th>Status</th>
-                        <th class="text-end pe-3">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($requests as $leaveRequest)
-                        @php
-                            $empName = $leaveRequest->employee?->full_name_km ?: $leaveRequest->employee?->full_name_en ?: $leaveRequest->employee?->employee_code;
-                        @endphp
-                        <tr>
-                            <td class="ps-3">
-                                <div class="fw-medium text-dark">{{ $empName }}</div>
-                                <small class="text-body-secondary">{{ $leaveRequest->employee?->department?->name ?? '—' }}</small>
-                            </td>
-                            <td>
-                                <span class="fw-medium">{{ $leaveRequest->leaveType?->name }}</span>
-                            </td>
-                            <td>
-                                <div>{{ $leaveRequest->start_date->format('d M Y') }} – {{ $leaveRequest->end_date->format('d M Y') }}</div>
-                                <small class="text-body-secondary">{{ number_format($leaveRequest->total_days ?? 0, 1) }} day{{ ($leaveRequest->total_days ?? 0) == 1 ? '' : 's' }}</small>
-                            </td>
-                            <td>
-                                <span class="small text-body-secondary">{{ \Illuminate\Support\Str::limit($leaveRequest->reason, 80) ?: '—' }}</span>
-                            </td>
-                            <td>
-                                <span class="badge text-bg-warning"><i class="fa-solid fa-hourglass-half me-1"></i>Pending</span>
-                            </td>
-                            <td class="text-end pe-3 text-nowrap">
-                                <form method="POST" action="{{ route('leave.requests.approve', $leaveRequest) }}" class="d-inline">
-                                    @csrf
-                                    <input type="hidden" name="note" value="Approved">
-                                    <button class="btn btn-action-link btn-sm text-success" type="submit">
-                                        <i class="fa-solid fa-check"></i><span>Approve</span>
-                                    </button>
-                                </form>
-                                <button class="btn btn-action-link btn-sm text-danger" type="button" data-bs-toggle="modal" data-bs-target="#rejectModal{{ $leaveRequest->id }}">
-                                    <i class="fa-solid fa-xmark"></i><span>Reject</span>
-                                </button>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td class="text-center text-body-secondary py-5" colspan="6">
-                                <i class="fa-solid fa-circle-check fa-xl d-block mb-3 text-success"></i>All leave requests have been reviewed. The approval queue is empty!
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-        <x-pagination-footer :paginator="$requests" />
+        @if($requests->count())
+            <div class="p-3 border-bottom bg-body-tertiary d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div>
+                    <div class="fw-semibold text-dark">Requests needing a decision</div>
+                    <div class="small text-body-secondary">Review the employee, leave period and reason before approving or rejecting.</div>
+                </div>
+                <span class="badge text-bg-light border text-dark">Oldest requests first</span>
+            </div>
+
+            <div class="p-3 d-grid gap-3">
+                @foreach($requests as $leaveRequest)
+                    @php
+                        $empName = $leaveRequest->employee?->full_name_km ?: $leaveRequest->employee?->full_name_en ?: $leaveRequest->employee?->employee_code;
+                    @endphp
+                    <article class="card shadow-none">
+                        <div class="card-body p-3 p-lg-4">
+                            <div class="row g-3 align-items-start">
+                                <div class="col-12 col-lg-4">
+                                    <div class="d-flex align-items-start gap-3">
+                                        <div class="page-icon flex-shrink-0"><i class="fa-solid fa-user"></i></div>
+                                        <div class="min-w-0">
+                                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                                <h2 class="h6 mb-0 text-dark">{{ $empName }}</h2>
+                                                <span class="badge text-bg-warning"><i class="fa-solid fa-hourglass-half me-1"></i>Pending</span>
+                                            </div>
+                                            <div class="small text-body-secondary mt-1">{{ $leaveRequest->employee?->employee_code }}</div>
+                                            <div class="small text-body-secondary">{{ $leaveRequest->employee?->department?->name ?? 'No department' }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-6 col-lg-3">
+                                    <div class="text-body-secondary small mb-1">Leave</div>
+                                    <div class="fw-semibold text-dark">{{ $leaveRequest->leaveType?->name }}</div>
+                                    <div class="small text-body-secondary mt-1">{{ number_format($leaveRequest->total_days ?? 0, 1) }} day{{ ($leaveRequest->total_days ?? 0) == 1 ? '' : 's' }}</div>
+                                </div>
+
+                                <div class="col-12 col-md-6 col-lg-3">
+                                    <div class="text-body-secondary small mb-1">Period</div>
+                                    <div class="fw-semibold text-dark">{{ $leaveRequest->start_date->format('d M Y') }}</div>
+                                    <div class="small text-body-secondary">to {{ $leaveRequest->end_date->format('d M Y') }}</div>
+                                </div>
+
+                                <div class="col-12 col-lg-2">
+                                    <div class="d-flex flex-lg-column justify-content-end gap-2">
+                                        <form method="POST" action="{{ route('leave.requests.approve', $leaveRequest) }}" class="flex-fill">
+                                            @csrf
+                                            <input type="hidden" name="note" value="Approved">
+                                            <button class="btn btn-success btn-sm w-100" type="submit">
+                                                <i class="fa-solid fa-check me-1"></i>Approve
+                                            </button>
+                                        </form>
+                                        <button class="btn btn-outline-danger btn-sm flex-fill" type="button" data-bs-toggle="modal" data-bs-target="#rejectModal{{ $leaveRequest->id }}">
+                                            <i class="fa-solid fa-xmark me-1"></i>Reject
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-3 pt-3 border-top">
+                                <div class="text-body-secondary small mb-1">Employee reason</div>
+                                <div class="small text-dark">{{ $leaveRequest->reason ?: 'No reason provided.' }}</div>
+                            </div>
+                        </div>
+                    </article>
+                @endforeach
+            </div>
+            <x-pagination-footer :paginator="$requests" />
+        @else
+            <div class="empty-state py-5 px-3">
+                <i class="fa-solid fa-circle-check fa-2xl d-block mb-3 text-success"></i>
+                <h2 class="h6 mb-1">Approval queue is clear</h2>
+                <p class="text-body-secondary mb-0">All leave requests have been reviewed. New requests will appear here when they need a decision.</p>
+            </div>
+        @endif
     </div>
 
     @foreach($requests as $leaveRequest)
