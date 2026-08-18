@@ -1,145 +1,49 @@
-﻿<x-layouts::app title="Training & Learning Catalogue">
+<x-layouts::app title="Training & Learning Catalogue">
     <x-workspace-command-bar title="Training Catalogue & Programs" icon="fa-graduation-cap" context="Learning & Development">
         <x-slot:filters>
-            <form class="reference-filter-form" method="GET" data-live-search-form hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true">
-                <div class="input-group reference-search">
-                    <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
-                    <input class="form-control" name="search" value="{{ request('search') }}" placeholder="Search course by title..." data-live-search hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="false" hx-trigger="keyup changed delay:500ms">
-                </div>
-            </form>
+            <form class="reference-filter-form" method="GET"><div class="input-group reference-search"><span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span><input class="form-control" name="search" value="{{ request('search') }}" placeholder="Search courses"></div><button class="btn btn-primary reference-search-button">Search</button></form>
         </x-slot:filters>
-        <x-slot:actions>
-            <x-list-actions :add-modal="auth()->user()->can('training.manage') ? 'createCourse' : null" add-label="Add new course" />
-        </x-slot:actions>
+        <x-slot:actions><x-list-actions :add-modal="auth()->user()->can('training.manage') ? 'createCourse' : null" add-label="Add course" /></x-slot:actions>
     </x-workspace-command-bar>
 
-    @if(session('status'))
-        <div class="alert alert-success d-flex align-items-center gap-2"><i class="fa-solid fa-circle-check"></i><span>{{ session('status') }}</span></div>
-    @endif
-    @if($errors->any())
-        <div class="alert alert-danger d-flex align-items-center gap-2"><i class="fa-solid fa-circle-exclamation"></i><span>{{ $errors->first() }}</span></div>
-    @endif
+    @if(session('status'))<div class="alert alert-success d-flex align-items-center gap-2"><i class="fa-solid fa-circle-check"></i><span>{{ session('status') }}</span></div>@endif
+    @if($errors->any())<div class="alert alert-danger d-flex align-items-center gap-2"><i class="fa-solid fa-circle-exclamation"></i><span>{{ $errors->first() }}</span></div>@endif
 
-    <div class="reference-list" data-list-container>
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th class="ps-3">Course Title</th>
-                        <th>Type</th>
-                        <th>Duration</th>
-                        <th>Enrolled</th>
-                        <th>Status</th>
-                        <th class="text-end pe-3">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($courses as $course)
-                        <tr>
-                            <td class="ps-3">
-                                <div class="fw-medium text-dark">{{ $course->title }}</div>
-                                @if($course->description)<small class="text-body-secondary">{{ \Illuminate\Support\Str::limit($course->description, 60) }}</small>@endif
-                            </td>
-                            <td>
-                                @if($course->is_mandatory)
-                                    <span class="badge text-bg-danger"><i class="fa-solid fa-triangle-exclamation me-1"></i>Mandatory</span>
-                                @else
-                                    <span class="badge text-bg-light border text-dark">Optional</span>
-                                @endif
-                            </td>
-                            <td>{{ number_format($course->duration_minutes/60, 1) }} hrs</td>
-                            <td>{{ $course->enrollments_count }} employee(s)</td>
-                            <td>
-                                <span class="badge text-bg-{{ $course->is_active ? 'success' : 'secondary' }}">{{ $course->is_active ? 'Active' : 'Inactive' }}</span>
-                            </td>
-                            <td class="text-end pe-3 text-nowrap">
-                                @can('training.manage')
-                                    <button class="btn btn-action-link btn-sm" data-bs-toggle="modal" data-bs-target="#enroll{{ $course->id }}">
-                                        <i class="fa-solid fa-user-plus"></i><span>Assign</span>
-                                    </button>
-                                    <button class="btn btn-action-link btn-sm" data-bs-toggle="modal" data-bs-target="#editCourse{{ $course->id }}">
-                                        <i class="fa-solid fa-pen"></i><span>Edit</span>
-                                    </button>
-                                    <form class="d-inline" method="POST" action="{{ route('training.destroy', $course) }}" data-confirm="Archive this course? Active enrollments must be completed first.">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button class="btn btn-action-link btn-sm text-danger" type="submit">
-                                            <i class="fa-solid fa-trash"></i><span>Delete</span>
-                                        </button>
-                                    </form>
-                                @endcan
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td class="text-center text-body-secondary py-5" colspan="6">
-                                <i class="fa-solid fa-graduation-cap fa-xl d-block mb-3 text-primary"></i>No training courses found in the catalogue.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-        <x-pagination-footer :paginator="$courses" />
+    <div class="d-flex align-items-end justify-content-between gap-3 mb-2"><div><div class="small text-uppercase text-body-secondary fw-semibold">Learning library</div><h2 class="h6 fw-bold mb-0">Available programs</h2></div><span class="small text-body-secondary">{{ $courses->total() }} course(s)</span></div>
+
+    <div class="row g-3" data-list-container>
+        @forelse($courses as $course)
+            <div class="col-md-6 col-xl-4">
+                <article class="profile-card h-100 mb-0 d-flex flex-column">
+                    <div class="profile-card-body flex-grow-1">
+                        <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+                            <span class="metric-icon {{ $course->is_mandatory ? 'bg-danger-subtle text-danger' : 'bg-primary-subtle text-primary' }}"><i class="fa-solid {{ $course->is_mandatory ? 'fa-shield-halved' : 'fa-book-open' }}"></i></span>
+                            <span class="status-text text-bg-{{ $course->is_active ? 'success' : 'secondary' }}">{{ $course->is_active ? 'Active' : 'Inactive' }}</span>
+                        </div>
+                        <h3 class="h6 fw-bold mb-2">{{ $course->title }}</h3>
+                        <p class="small text-body-secondary mb-3">{{ $course->description ? \Illuminate\Support\Str::limit($course->description, 120) : 'No course description provided.' }}</p>
+                        <div class="d-flex gap-4 small"><div><span class="d-block text-body-secondary">Duration</span><strong>{{ number_format($course->duration_minutes/60,1) }} hrs</strong></div><div><span class="d-block text-body-secondary">Assigned</span><strong>{{ $course->enrollments_count }}</strong></div><div><span class="d-block text-body-secondary">Type</span><strong>{{ $course->is_mandatory ? 'Mandatory' : 'Optional' }}</strong></div></div>
+                    </div>
+                    @can('training.manage')
+                        <div class="card-footer bg-white d-flex align-items-center justify-content-end gap-1">
+                            <button class="btn btn-action-link btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#enroll{{ $course->id }}"><i class="fa-solid fa-user-plus"></i><span>Assign</span></button>
+                            <button class="btn btn-action-link btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#editCourse{{ $course->id }}"><i class="fa-solid fa-pen"></i><span>Edit</span></button>
+                            <div class="dropdown"><button class="btn btn-action-link btn-sm" type="button" data-bs-toggle="dropdown"><i class="fa-solid fa-ellipsis"></i></button><ul class="dropdown-menu dropdown-menu-end"><li><form method="POST" action="{{ route('training.destroy',$course) }}" data-confirm="Archive this course? Active enrollments must be completed first.">@csrf @method('DELETE')<button class="dropdown-item text-danger" type="submit"><i class="fa-solid fa-box-archive me-2"></i>Archive course</button></form></li></ul></div>
+                        </div>
+                    @endcan
+                </article>
+            </div>
+        @empty
+            <div class="col-12"><div class="profile-card mb-0"><div class="profile-card-body py-5 text-center text-body-secondary"><i class="fa-solid fa-graduation-cap fa-xl d-block mb-3 text-primary"></i>No training courses found.</div></div></div>
+        @endforelse
+        <div class="col-12"><x-pagination-footer :paginator="$courses" /></div>
     </div>
 
     @can('training.manage')
-        <div class="modal fade" id="createCourse" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <form class="modal-content" method="POST" action="{{ route('training.store') }}">
-                    @csrf
-                    <div class="modal-header">
-                        <h2 class="modal-title fs-5"><i class="fa-solid fa-graduation-cap me-2 text-primary"></i>Add course to catalogue</h2>
-                        <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <x-training-course-fields />
-                    </div>
-                    <x-form-save-actions :allow-save-new="true" save-label="Create course" />
-                </form>
-            </div>
-        </div>
-
+        <div class="modal fade" id="createCourse" tabindex="-1"><div class="modal-dialog modal-lg"><form class="modal-content" method="POST" action="{{ route('training.store') }}">@csrf<div class="modal-header"><h2 class="modal-title fs-5"><i class="fa-solid fa-graduation-cap me-2 text-primary"></i>Add course</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div><div class="modal-body"><x-training-course-fields /></div><x-form-save-actions :allow-save-new="true" save-label="Create course" /></form></div></div>
         @foreach($courses as $course)
-            <div class="modal fade" id="editCourse{{ $course->id }}" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                    <form class="modal-content" method="POST" action="{{ route('training.update', $course) }}">
-                        @csrf
-                        @method('PUT')
-                        <div class="modal-header">
-                            <h2 class="modal-title fs-5"><i class="fa-solid fa-pen me-2 text-primary"></i>Edit course</h2>
-                            <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <x-training-course-fields :course="$course" />
-                        </div>
-                        <x-form-save-actions save-label="Save changes" />
-                    </form>
-                </div>
-            </div>
-
-            <div class="modal fade" id="enroll{{ $course->id }}" tabindex="-1">
-                <div class="modal-dialog">
-                    <form class="modal-content" method="POST" action="{{ route('training.enroll', $course) }}">
-                        @csrf
-                        <div class="modal-header">
-                            <h2 class="modal-title fs-5"><i class="fa-solid fa-user-plus me-2 text-primary"></i>Assign {{ $course->title }}</h2>
-                            <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <label class="form-label">Employee <span class="text-danger">*</span></label>
-                            <select class="form-select" name="employee_id" required>
-                                @foreach($employees as $employee)
-                                    <option value="{{ $employee->id }}">{{ $employee->getFullName() }}</option>
-                                @endforeach
-                            </select>
-                            <label class="form-label mt-3">Target completion deadline</label>
-                            <input class="form-control" type="date" name="due_date" min="{{ today()->toDateString() }}">
-                        </div>
-                        <x-form-save-actions save-label="Assign training" />
-                    </form>
-                </div>
-            </div>
+            <div class="modal fade" id="editCourse{{ $course->id }}" tabindex="-1"><div class="modal-dialog modal-lg"><form class="modal-content" method="POST" action="{{ route('training.update',$course) }}">@csrf @method('PUT')<div class="modal-header"><h2 class="modal-title fs-5"><i class="fa-solid fa-pen me-2 text-primary"></i>Edit course</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div><div class="modal-body"><x-training-course-fields :course="$course" /></div><x-form-save-actions save-label="Save changes" /></form></div></div>
+            <div class="modal fade" id="enroll{{ $course->id }}" tabindex="-1"><div class="modal-dialog"><form class="modal-content" method="POST" action="{{ route('training.enroll',$course) }}">@csrf<div class="modal-header"><h2 class="modal-title fs-5"><i class="fa-solid fa-user-plus me-2 text-primary"></i>Assign {{ $course->title }}</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="form-label">Employee <span class="text-danger">*</span></label><select class="form-select" name="employee_id" required>@foreach($employees as $employee)<option value="{{ $employee->id }}">{{ $employee->getFullName() }}</option>@endforeach</select><label class="form-label mt-3">Target completion deadline</label><input class="form-control" type="date" name="due_date" min="{{ today()->toDateString() }}"></div><x-form-save-actions save-label="Assign training" /></form></div></div>
         @endforeach
     @endcan
 </x-layouts::app>
