@@ -4,8 +4,14 @@
             <form class="reference-filter-form" method="GET" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true">
                 <div class="input-group reference-search">
                     <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
-                    <input class="form-control" name="search" value="{{ request('search') }}" placeholder="Search code or asset name" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="false" hx-trigger="keyup changed delay:500ms">
+                    <input class="form-control" name="search" value="{{ request('search') }}" placeholder="Search name, code, serial or category" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="false" hx-trigger="keyup changed delay:500ms">
                 </div>
+                <select class="form-select reference-status" name="category" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
+                    <option value="">All categories</option>
+                    @foreach($categories as $category)
+                        <option value="{{ $category }}" @selected(request('category') === $category)>{{ $category }}</option>
+                    @endforeach
+                </select>
                 <select class="form-select reference-status" name="status" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
                     <option value="">All statuses</option>
                     @foreach(['available','assigned','lost','retired'] as $status)
@@ -126,7 +132,7 @@
             <div class="empty-state py-5 px-3">
                 <i class="fa-solid fa-boxes-stacked fa-2xl d-block mb-3 text-primary"></i>
                 <h2 class="h6 mb-1">No assets found</h2>
-                <p class="text-body-secondary mb-0">Adjust the search or status filter, or register the first asset.</p>
+                <p class="text-body-secondary mb-0">Adjust the search, category or status filter, or register the first asset.</p>
             </div>
         @endif
     </div>
