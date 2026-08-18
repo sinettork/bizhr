@@ -1,0 +1,26 @@
+<?php
+
+return [
+    'actions' => 'Actions',
+    'approve' => 'Approve',
+    'back' => 'Back',
+    'cancel' => 'Cancel',
+    'close' => 'Close',
+    'confirm' => 'Confirm',
+    'confirm_action' => 'Confirm action',
+    'create' => 'Create',
+    'delete' => 'Delete',
+    'download' => 'Download',
+    'edit' => 'Edit',
+    'error' => 'Something went wrong',
+    'export' => 'Export',
+    'import' => 'Import',
+    'loading' => 'Processing…',
+    'no_data' => 'No data yet.',
+    'reject' => 'Reject',
+    'retry' => 'Try again',
+    'save' => 'Save',
+    'search' => 'Search',
+    'status' => 'Status',
+    'success' => 'Completed successfully.',
+];

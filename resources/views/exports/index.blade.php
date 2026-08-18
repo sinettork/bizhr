@@ -1,0 +1,10 @@
+<x-layouts::app title="Data exports">
+    <x-workspace-command-bar title="Data exports" icon="fa-file-export">
+        <x-slot:actions>@foreach (['employees' => 'Employees', 'attendance' => 'Attendance', 'payroll' => 'Payroll'] as $type => $label)<form method="POST" action="{{ route('exports.store', $type) }}">@csrf<button class="btn btn-action-link btn-sm" type="submit"><i class="fa-solid fa-file-excel"></i><span>Export {{ $label }}</span></button></form>@endforeach</x-slot:actions>
+    </x-workspace-command-bar>
+    @if (session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+    <div class="reference-list" data-list-container><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th class="ps-3">Type</th><th>Status</th><th>Rows</th><th>Created</th><th class="text-end pe-3">Actions</th></tr></thead><tbody>
+        @forelse ($exports as $export)<tr><td class="ps-3 fw-medium">{{ ucfirst($export->type) }}</td><td><span class="badge text-bg-{{ $export->status === 'completed' ? 'success' : ($export->status === 'failed' ? 'danger' : 'warning') }}">{{ ucfirst($export->status) }}</span></td><td>{{ number_format($export->row_count ?? 0) }}</td><td>{{ $export->created_at->format('d M Y H:i') }}</td><td class="text-end pe-3">@if ($export->status === 'completed' && ! $export->expires_at?->isPast())<a class="btn btn-action-link btn-sm" href="{{ route('exports.download', $export) }}"><i class="fa-solid fa-download"></i><span>Download</span></a>@else<span class="text-body-secondary">—</span>@endif</td></tr>@empty<tr><td class="text-center text-body-secondary py-5" colspan="5">No exports have been requested.</td></tr>@endforelse
+    </tbody></table></div><x-pagination-footer :paginator="$exports" /></div>
+    @if ($exports->contains(fn ($export) => in_array($export->status, ['queued', 'processing'], true)))<script nonce="{{ request()->attributes->get('csp_nonce') }}">window.setTimeout(() => window.location.reload(), 5000);</script>@endif
+</x-layouts::app>

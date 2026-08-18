@@ -1,0 +1,17 @@
+{
+  "name": "bizhr",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/copy-frontend-vendors.mjs && vite build",
+    "postinstall": "npm run build"
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.1.0",
+    "@laravel/passkeys": "^0.2.0",
+    "bootstrap": "^5.3.8",
+    "htmx.org": "2.0.10",
+    "laravel-vite-plugin": "^3.1",
+    "qrcode": "^1.5.4",
+    "vite": "^8.0.0"
+  }
+}

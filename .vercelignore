@@ -1,0 +1,39 @@
+# Backend files (run on Railway, not Vercel)
+app/
+bootstrap/
+config/
+database/
+routes/
+storage/
+tests/
+vendor/
+artisan
+composer.json
+composer.lock
+phpstan.neon
+phpunit.xml
+pint.json
+
+# Development files
+.env
+.env.*.local
+.idea/
+.vscode/
+node_modules/
+*.log
+
+# Docker (for Railway only)
+Dockerfile
+.docker/
+RAILWAY_DEPLOYMENT.md
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# Generated/Temporary
+*.swp
+*.swo
+*~
+.DS_Store

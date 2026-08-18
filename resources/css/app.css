@@ -1,0 +1,28 @@
+/* Frontend assets are loaded directly by Blade: Bootstrap, Font Awesome, and public/js/app.js. */
+.contract-create-form > .card:last-of-type > .card-footer {
+    display: none;
+}
+.access-review-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2rem;
+    padding: .65rem 1rem;
+    border-bottom: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    font-size: .875rem;
+}
+.btn-action-link.text-danger,
+.btn-action-link.text-danger:hover,
+.btn-action-link.text-danger:focus,
+.btn-action-link.text-danger:focus-visible,
+.btn-action-link.text-danger:active,
+.btn-action-link.text-danger.active {
+    color: #dc3545 !important;
+}
+.btn-action-link.text-danger:hover,
+.btn-action-link.text-danger:focus,
+.btn-action-link.text-danger:focus-visible,
+.btn-action-link.text-danger:active,
+.btn-action-link.text-danger.active {
+    background: rgba(220, 53, 69, .08) !important;
+}
