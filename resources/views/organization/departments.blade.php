@@ -59,21 +59,19 @@
                             </div>
                         </div>
 
-                        <div class="row g-2">
+                        <div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 row-cols-xxl-5 g-2">
                             @foreach($group as $department)
-                                <div class="col-12 col-md-6 col-xl-4">
+                                <div class="col">
                                     <article class="card h-100 shadow-none department-compact-card">
-                                        <div class="card-body p-3">
+                                        <div class="card-body p-2 p-lg-3">
                                             <div class="d-flex align-items-start justify-content-between gap-2">
                                                 <div class="d-flex align-items-start gap-2 min-w-0">
-                                                    <span class="page-icon flex-shrink-0" style="width:38px;height:38px;font-size:.82rem;"><i class="fa-solid fa-sitemap"></i></span>
+                                                    <span class="page-icon flex-shrink-0" style="width:34px;height:34px;font-size:.76rem;"><i class="fa-solid fa-sitemap"></i></span>
                                                     <div class="min-w-0">
+                                                        <h3 class="h6 mb-1 text-dark text-truncate" title="{{ $department->name }}">{{ $department->name }}</h3>
                                                         <div class="d-flex align-items-center gap-2 flex-wrap">
-                                                            <h3 class="h6 mb-0 text-dark text-truncate">{{ $department->name }}</h3>
                                                             <span class="badge text-bg-{{ $department->is_active ? 'success' : 'secondary' }}">{{ $department->is_active ? 'Active' : 'Inactive' }}</span>
-                                                        </div>
-                                                        <div class="small text-body-secondary mt-1 text-truncate">
-                                                            <i class="fa-solid fa-code me-1"></i>{{ $department->code ?: 'No code' }}
+                                                            <span class="small text-body-secondary text-truncate"><i class="fa-solid fa-code me-1"></i>{{ $department->code ?: 'No code' }}</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -99,21 +97,18 @@
                                                 </div>
                                             </div>
 
-                                            <hr class="my-3">
+                                            <hr class="my-2">
 
                                             <div class="row g-0 text-center">
                                                 <div class="col-4 px-1">
-                                                    <i class="fa-solid fa-users text-body-secondary small d-block mb-1"></i>
                                                     <div class="fw-bold text-dark">{{ number_format($department->employees_count) }}</div>
                                                     <div class="small text-body-secondary">Employees</div>
                                                 </div>
                                                 <div class="col-4 px-1 border-start border-end">
-                                                    <i class="fa-solid fa-id-badge text-body-secondary small d-block mb-1"></i>
                                                     <div class="fw-semibold text-dark text-truncate" title="{{ $department->manager_name ?: 'Not assigned' }}">{{ $department->manager_name ?: '—' }}</div>
                                                     <div class="small text-body-secondary">Manager</div>
                                                 </div>
                                                 <div class="col-4 px-1">
-                                                    <i class="fa-solid fa-building text-body-secondary small d-block mb-1"></i>
                                                     <div class="fw-semibold text-dark text-truncate" title="{{ $department->branch?->name ?: 'Company-wide' }}">{{ $department->branch?->code ?: '—' }}</div>
                                                     <div class="small text-body-secondary">Branch</div>
                                                 </div>
