@@ -70,31 +70,20 @@
                                                     <div class="min-w-0">
                                                         <h3 class="h6 mb-1 text-dark text-truncate" title="{{ $department->name }}">{{ $department->name }}</h3>
                                                         <div class="d-flex align-items-center gap-2 flex-wrap">
-                                                            <span class="badge text-bg-{{ $department->is_active ? 'success' : 'secondary' }}">{{ $department->is_active ? 'Active' : 'Inactive' }}</span>
+                                                            <span class="status-text text-bg-{{ $department->is_active ? 'success' : 'secondary' }}">{{ $department->is_active ? 'Active' : 'Inactive' }}</span>
                                                             <span class="small text-body-secondary text-truncate"><i class="fa-solid fa-code me-1"></i>{{ $department->code ?: 'No code' }}</span>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div class="dropdown flex-shrink-0">
-                                                    <button class="btn btn-action-link btn-sm px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Department actions">
-                                                        <i class="fa-solid fa-ellipsis-vertical"></i>
-                                                    </button>
-                                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                                                        @can('department.edit')
-                                                            <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editDepartment{{ $department->id }}"><i class="fa-solid fa-pen me-2"></i>Edit department</button></li>
-                                                        @endcan
-                                                        @can('department.delete')
-                                                            <li><hr class="dropdown-divider"></li>
-                                                            <li>
-                                                                <form method="POST" action="{{ route('departments.destroy', $department) }}" data-confirm="Delete this department? Referenced departments cannot be deleted.">
-                                                                    @csrf @method('DELETE')
-                                                                    <button class="dropdown-item text-danger" type="submit"><i class="fa-solid fa-trash me-2"></i>Delete department</button>
-                                                                </form>
-                                                            </li>
-                                                        @endcan
-                                                    </ul>
-                                                </div>
+                                                <x-entity-action-menu
+                                                    :can-edit="auth()->user()->can('department.edit')"
+                                                    :can-delete="auth()->user()->can('department.delete')"
+                                                    edit-target="#editDepartment{{ $department->id }}"
+                                                    :delete-url="route('departments.destroy', $department)"
+                                                    delete-confirm="Delete this department? Referenced departments cannot be deleted."
+                                                    aria-label="Actions for {{ $department->name }}"
+                                                />
                                             </div>
 
                                             <hr class="my-2">
@@ -123,11 +112,7 @@
             </div>
             <x-pagination-footer :paginator="$departments" />
         @else
-            <div class="empty-state py-5 px-3">
-                <i class="fa-solid fa-sitemap fa-2xl d-block mb-3 text-primary"></i>
-                <h2 class="h6 mb-1">No departments found</h2>
-                <p class="text-body-secondary mb-0">Adjust the branch or status filters, or add a department to build your organization structure.</p>
-            </div>
+            <x-empty-state class="py-5 px-3" icon="fa-sitemap" title="No departments found" message="Adjust the branch or status filters, or add a department to build your organization structure." />
         @endif
     </div>
 
