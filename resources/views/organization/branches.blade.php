@@ -80,17 +80,6 @@
                                     </div>
                                 </div>
 
-                                <div class="small mt-3">
-                                    <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
-                                        <span class="text-body-secondary">Workforce footprint</span>
-                                        <strong class="text-dark">{{ number_format($branch->employees_count) }} emp · {{ number_format($branch->departments_count) }} dept</strong>
-                                    </div>
-                                    <div class="progress" style="height:4px;">
-                                        @php($footprint = min(100, max(8, ($branch->employees_count * 8) + ($branch->departments_count * 6))))
-                                        <div class="progress-bar" role="progressbar" style="width: {{ $footprint }}%" aria-label="Workforce footprint"></div>
-                                    </div>
-                                </div>
-
                                 <hr class="my-3">
 
                                 <div class="row g-0 text-center mt-auto">
