@@ -10,7 +10,7 @@
             <div class="px-3 py-2 border-bottom bg-body-tertiary d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div>
                     <div class="fw-semibold text-dark">Equipment assigned to me</div>
-                    <div class="small text-body-secondary">Current company equipment, return expectations and handover condition.</div>
+                    <div class="small text-body-secondary">Recognize equipment quickly by photo, code and handover details.</div>
                 </div>
                 <span class="badge status-counter">{{ number_format($assignments->total()) }} item(s)</span>
             </div>
@@ -29,21 +29,29 @@
                         };
                     @endphp
                     <div class="col-12 col-md-6 col-xl-4 col-xxl-3">
-                        <article class="card h-100 shadow-none">
+                        <article class="card h-100 shadow-none overflow-hidden">
                             <div class="card-body p-3 d-flex flex-column">
-                                <div class="d-flex align-items-start justify-content-between gap-2">
-                                    <div class="d-flex align-items-start gap-2 min-w-0">
-                                        <span class="page-icon flex-shrink-0" style="width:38px;height:38px;font-size:.82rem;"><i class="fa-solid {{ $assetIcon }}"></i></span>
-                                        <div class="min-w-0">
-                                            <div class="d-flex align-items-center gap-2 flex-wrap">
-                                                <h2 class="h6 mb-0 text-dark text-truncate">{{ $asset?->name }}</h2>
-                                                <span class="badge text-bg-{{ $isAssigned ? 'primary' : 'secondary' }}">{{ ucfirst($assignment->status) }}</span>
-                                            </div>
-                                            <div class="small text-body-secondary mt-1 text-truncate">{{ $asset?->asset_code }} · {{ $asset?->category ?? 'General' }}</div>
-                                            @if($asset?->serial_number)<div class="small text-body-secondary text-truncate" title="{{ $asset->serial_number }}">S/N {{ $asset->serial_number }}</div>@endif
+                                <div class="d-flex align-items-start gap-3">
+                                    <div class="flex-shrink-0 rounded-3 overflow-hidden border bg-body-tertiary d-flex align-items-center justify-content-center" style="width:76px;height:76px;">
+                                        @if($asset?->image_path)
+                                            <img src="{{ asset('storage/'.$asset->image_path) }}" alt="{{ $asset?->name }}" class="w-100 h-100" loading="lazy" style="object-fit:cover;">
+                                        @else
+                                            <i class="fa-solid {{ $assetIcon }} text-primary fs-4"></i>
+                                        @endif
+                                    </div>
+                                    <div class="min-w-0 flex-grow-1">
+                                        <h2 class="h6 mb-1 text-dark text-truncate">{{ $asset?->name }}</h2>
+                                        <div class="small text-body-secondary text-truncate">{{ $asset?->asset_code }}</div>
+                                        <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                                            <span class="badge text-bg-{{ $isAssigned ? 'primary' : 'secondary' }}">{{ ucfirst($assignment->status) }}</span>
+                                            <span class="small text-body-secondary">{{ $asset?->category ?? 'General' }}</span>
                                         </div>
                                     </div>
                                 </div>
+
+                                @if($asset?->serial_number)
+                                    <div class="small text-body-secondary text-truncate mt-3" title="{{ $asset->serial_number }}"><i class="fa-solid fa-barcode me-1"></i>S/N {{ $asset->serial_number }}</div>
+                                @endif
 
                                 <hr class="my-3">
 
