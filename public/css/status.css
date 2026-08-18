@@ -1,0 +1,55 @@
+/* BizHR status language: semantic text + dot, never filled pills. */
+.badge[class*="text-bg-"] {
+    display: inline-flex;
+    align-items: center;
+    gap: .38rem;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    font-size: .72rem;
+    font-weight: 650;
+    line-height: 1.35;
+    letter-spacing: 0;
+    vertical-align: middle;
+}
+
+.badge[class*="text-bg-"]::before {
+    content: "";
+    width: .43rem;
+    height: .43rem;
+    flex: 0 0 .43rem;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: .88;
+}
+
+.badge.text-bg-primary { color: #4338ca !important; }
+.badge.text-bg-secondary { color: #64748b !important; }
+.badge.text-bg-success { color: #15803d !important; }
+.badge.text-bg-danger { color: #c2414b !important; }
+.badge.text-bg-warning { color: #a16207 !important; }
+.badge.text-bg-info { color: #0369a1 !important; }
+.badge.text-bg-light { color: #64748b !important; }
+.badge.text-bg-dark { color: #334155 !important; }
+
+/* Keep status treatment quiet inside dense tables and cards. */
+.reference-list .badge[class*="text-bg-"],
+.card .badge[class*="text-bg-"] {
+    font-size: .71rem;
+}
+
+/* A badge used as a numeric counter should keep its compact capsule treatment. */
+.badge.status-counter,
+.badge.status-counter[class*="text-bg-"] {
+    display: inline-block;
+    padding: .3em .58em !important;
+    border-radius: 999px !important;
+    background: var(--bs-secondary-bg) !important;
+    color: var(--bs-secondary-color) !important;
+}
+
+.badge.status-counter::before {
+    display: none;
+}
