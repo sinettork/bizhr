@@ -2,6 +2,11 @@
 
 return [
     'qr' => [
+        // Optional public/LAN HTTPS origin used inside generated attendance QR codes.
+        // Example: https://hr.example.com or https://your-tunnel.example.app
+        // Leave null to use Laravel's normal APP_URL / current route URL behavior.
+        'public_url' => env('ATTENDANCE_QR_PUBLIC_URL'),
+
         // Short enough to make photographed QR codes impractical to reuse.
         'session_lifetime_seconds' => (int) env('ATTENDANCE_QR_LIFETIME_SECONDS', 45),
 
