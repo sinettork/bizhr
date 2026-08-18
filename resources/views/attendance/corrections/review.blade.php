@@ -1,2 +1,162 @@
-<x-layouts::app title="Review attendance corrections"><x-workspace-command-bar title="Review attendance corrections" icon="fa-list-check" context="Time and attendance" />@if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
-<div class="reference-list" data-list-container><div class="reference-list-toolbar"><h2 class="h6 mb-0">Pending requests</h2></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th class="ps-3">Employee</th><th>Date / original</th><th>Requested change</th><th>Reason</th><th class="text-end pe-3">Decision</th></tr></thead><tbody>@forelse($corrections as $correction)<tr><td class="ps-3 fw-semibold">{{ $correction->employee?->getFullName() }}<small class="d-block text-body-secondary">{{ $correction->employee?->department?->name }}</small></td><td>{{ $correction->attendance?->work_date?->format('d M Y') }}<small class="d-block text-body-secondary">{{ $correction->attendance?->check_in_at?->format('H:i') ?? '—' }} / {{ $correction->attendance?->check_out_at?->format('H:i') ?? '—' }}</small></td><td>{{ $correction->requested_check_in?->format('H:i') ?? '—' }} / {{ $correction->requested_check_out?->format('H:i') ?? '—' }}</td><td>{{ $correction->reason }}</td><td class="text-end pe-3"><form class="d-inline" method="POST" action="{{ route('attendance.corrections.approve',$correction) }}">@csrf<button class="btn btn-sm btn-success" type="submit">Approve</button></form><button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#reject{{ $correction->id }}">Reject</button><div class="collapse mt-2" id="reject{{ $correction->id }}"><form method="POST" action="{{ route('attendance.corrections.reject',$correction) }}" class="d-flex gap-1">@csrf<input class="form-control form-control-sm" name="note" required minlength="3" placeholder="Reason"><button class="btn btn-sm btn-danger" type="submit">Confirm</button></form></div></td></tr>@empty<tr><td colspan="5" class="py-5 text-center text-body-secondary">No pending corrections.</td></tr>@endforelse</tbody></table></div>@if($corrections->hasPages())<div class="reference-list-footer">{{ $corrections->links() }}</div>@endif</div></x-layouts::app>
+<x-layouts::app title="Review attendance corrections">
+    <x-workspace-command-bar title="Review attendance corrections" icon="fa-list-check" context="Time and attendance" />
+
+    @if(session('status'))
+        <div class="alert alert-success d-flex align-items-center gap-2">
+            <i class="fa-solid fa-circle-check"></i><span>{{ session('status') }}</span>
+        </div>
+    @endif
+    @if($errors->any())
+        <div class="alert alert-danger d-flex align-items-center gap-2">
+            <i class="fa-solid fa-circle-exclamation"></i><span>{{ $errors->first() }}</span>
+        </div>
+    @endif
+
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+        <div>
+            <h2 class="h6 fw-bold mb-1">Pending correction decisions</h2>
+            <p class="small text-body-secondary mb-0">Compare the recorded attendance with the employee's requested change before approving.</p>
+        </div>
+        <span class="badge rounded-pill text-bg-primary px-3 py-2">{{ $corrections->total() }} pending</span>
+    </div>
+
+    <div class="vstack gap-3" data-list-container>
+        @forelse($corrections as $correction)
+            @php
+                $attendance = $correction->attendance;
+                $employee = $correction->employee;
+                $originalIn = $attendance?->check_in_at?->format('H:i');
+                $originalOut = $attendance?->check_out_at?->format('H:i');
+                $requestedIn = $correction->requested_check_in?->format('H:i');
+                $requestedOut = $correction->requested_check_out?->format('H:i');
+                $changesIn = filled($requestedIn) && $requestedIn !== $originalIn;
+                $changesOut = filled($requestedOut) && $requestedOut !== $originalOut;
+            @endphp
+
+            <article class="card border-0 shadow-sm">
+                <div class="card-body p-3 p-lg-4">
+                    <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
+                        <div class="d-flex gap-3 align-items-start">
+                            <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style="width:42px;height:42px">
+                                <i class="fa-solid fa-user-clock"></i>
+                            </div>
+                            <div>
+                                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                    <h3 class="h6 fw-bold mb-0">{{ $employee?->getFullName() }}</h3>
+                                    <span class="badge text-bg-warning">Pending</span>
+                                </div>
+                                <div class="small text-body-secondary">
+                                    {{ $employee?->employee_code ?: '—' }}
+                                    <span class="mx-1">•</span>
+                                    {{ $employee?->department?->name ?: 'No department' }}
+                                    @if($employee?->branch?->name)
+                                        <span class="mx-1">•</span>{{ $employee->branch->name }}
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-lg-end">
+                            <div class="small text-body-secondary">Attendance date</div>
+                            <div class="fw-semibold">{{ $attendance?->work_date?->format('d M Y') ?: '—' }}</div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mt-1">
+                        <div class="col-12 col-xl-7">
+                            <div class="border rounded-3 overflow-hidden h-100">
+                                <div class="row g-0">
+                                    <div class="col-12 col-md-6 p-3 border-end-md">
+                                        <div class="small text-uppercase text-body-secondary fw-semibold mb-2">Recorded attendance</div>
+                                        <div class="d-flex gap-4">
+                                            <div>
+                                                <div class="small text-body-secondary">Check in</div>
+                                                <div class="fs-5 fw-semibold">{{ $originalIn ?: '—' }}</div>
+                                            </div>
+                                            <div>
+                                                <div class="small text-body-secondary">Check out</div>
+                                                <div class="fs-5 fw-semibold">{{ $originalOut ?: '—' }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-md-6 p-3 bg-body-tertiary">
+                                        <div class="small text-uppercase text-body-secondary fw-semibold mb-2">Requested correction</div>
+                                        <div class="d-flex gap-4">
+                                            <div>
+                                                <div class="small text-body-secondary">Check in</div>
+                                                <div class="fs-5 fw-semibold {{ $changesIn ? 'text-primary' : '' }}">{{ $requestedIn ?: $originalIn ?: '—' }}</div>
+                                                @if($changesIn)<small class="text-primary"><i class="fa-solid fa-arrow-up-right-dots me-1"></i>Changed</small>@endif
+                                            </div>
+                                            <div>
+                                                <div class="small text-body-secondary">Check out</div>
+                                                <div class="fs-5 fw-semibold {{ $changesOut ? 'text-primary' : '' }}">{{ $requestedOut ?: $originalOut ?: '—' }}</div>
+                                                @if($changesOut)<small class="text-primary"><i class="fa-solid fa-arrow-up-right-dots me-1"></i>Changed</small>@endif
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-xl-5">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="small text-uppercase text-body-secondary fw-semibold mb-2">Employee reason</div>
+                                <p class="mb-0">{{ $correction->reason }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap justify-content-end gap-2 mt-3 pt-3 border-top">
+                        <button class="btn btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#rejectCorrection{{ $correction->id }}">
+                            <i class="fa-solid fa-xmark me-1"></i>Reject
+                        </button>
+                        <form method="POST" action="{{ route('attendance.corrections.approve', $correction) }}">
+                            @csrf
+                            <button class="btn btn-success" type="submit">
+                                <i class="fa-solid fa-check me-1"></i>Approve correction
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+
+            <div class="modal fade" id="rejectCorrection{{ $correction->id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <form class="modal-content" method="POST" action="{{ route('attendance.corrections.reject', $correction) }}">
+                        @csrf
+                        <div class="modal-header">
+                            <div>
+                                <h2 class="modal-title fs-5">Reject correction request</h2>
+                                <div class="small text-body-secondary mt-1">{{ $employee?->getFullName() }} · {{ $attendance?->work_date?->format('d M Y') }}</div>
+                            </div>
+                            <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label class="form-label" for="rejectNote{{ $correction->id }}">Reason for rejection <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="rejectNote{{ $correction->id }}" name="note" required minlength="3" maxlength="1000" rows="4" placeholder="Explain why this correction cannot be approved."></textarea>
+                            <div class="form-text">This note will be visible in the correction history.</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-light" type="button" data-bs-dismiss="modal">Cancel</button>
+                            <button class="btn btn-danger" type="submit"><i class="fa-solid fa-xmark me-1"></i>Confirm rejection</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        @empty
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-5 text-center">
+                    <div class="rounded-circle bg-success-subtle text-success d-inline-flex align-items-center justify-content-center mb-3" style="width:52px;height:52px">
+                        <i class="fa-solid fa-check-double fa-lg"></i>
+                    </div>
+                    <h2 class="h6 fw-bold">No corrections waiting for review</h2>
+                    <p class="text-body-secondary small mb-0">The attendance correction queue is clear.</p>
+                </div>
+            </div>
+        @endforelse
+
+        @if($corrections->hasPages())
+            <div class="reference-list-footer bg-transparent border-0 px-0">{{ $corrections->links() }}</div>
+        @endif
+    </div>
+</x-layouts::app>
