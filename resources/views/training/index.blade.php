@@ -58,21 +58,18 @@
                             <button class="btn btn-action-link btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#enroll{{ $course->id }}">
                                 <i class="fa-solid fa-user-plus"></i><span>Assign</span>
                             </button>
-                            <div class="dropdown">
-                                <button class="btn btn-action-link btn-sm px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More actions for {{ $course->title }}">
-                                    <i class="fa-solid fa-ellipsis-vertical"></i>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                                    <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editCourse{{ $course->id }}"><i class="fa-solid fa-pen me-2"></i>Edit course</button></li>
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li>
-                                        <form method="POST" action="{{ route('training.destroy',$course) }}" data-confirm="Archive this course? Active enrollments must be completed first.">
-                                            @csrf @method('DELETE')
-                                            <button class="dropdown-item text-danger" type="submit"><i class="fa-solid fa-box-archive me-2"></i>Archive course</button>
-                                        </form>
-                                    </li>
-                                </ul>
-                            </div>
+
+                            <x-entity-action-menu
+                                :can-edit="true"
+                                :can-delete="true"
+                                edit-target="#editCourse{{ $course->id }}"
+                                edit-label="Edit"
+                                :delete-url="route('training.destroy', $course)"
+                                delete-label="Archive"
+                                delete-icon="fa-box-archive"
+                                delete-confirm="Archive this course? Active enrollments must be completed first."
+                                aria-label="Actions for {{ $course->title }}"
+                            />
                         </div>
                     @endcan
                 </article>
