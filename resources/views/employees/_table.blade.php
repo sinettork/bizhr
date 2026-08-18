@@ -83,9 +83,8 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7" class="py-5 text-center text-body-secondary">
-                        <i class="fa-solid fa-users fa-xl d-block mb-3 text-primary"></i>
-                        No employees found.
+                    <td colspan="7" class="p-0">
+                        <x-empty-state class="py-5 px-3" icon="fa-users" title="No employees found" message="Adjust the filters or add the first employee." />
                     </td>
                 </tr>
             @endforelse
