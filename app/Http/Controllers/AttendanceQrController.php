@@ -73,7 +73,7 @@ class AttendanceQrController extends Controller
         ]);
 
         return back()->with('qr_session', [
-            'url' => route('attendance.qr.start', $token),
+            'url' => $this->scanUrl($token),
             'expires_at' => $session->expires_at->toIso8601String(),
             'branch' => $branch->name,
         ]);
@@ -128,6 +128,18 @@ class AttendanceQrController extends Controller
             'branch' => $result['branch']->name,
             'distance' => $result['distance'],
         ]);
+    }
+
+    private function scanUrl(string $token): string
+    {
+        $path = route('attendance.qr.start', ['token' => $token], false);
+        $publicUrl = trim((string) config('attendance.qr.public_url'));
+
+        if ($publicUrl !== '') {
+            return rtrim($publicUrl, '/').'/'.ltrim($path, '/');
+        }
+
+        return route('attendance.qr.start', ['token' => $token]);
     }
 
     private function session(string $token, bool $lock = false): AttendanceQrSession
