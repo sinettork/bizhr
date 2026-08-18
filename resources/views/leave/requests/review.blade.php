@@ -1,7 +1,7 @@
 <x-layouts::app title="Review Leave Requests">
     <x-workspace-command-bar title="Leave Approval Queue" icon="fa-list-check" context="HR & Approvals">
         <x-slot:actions>
-            <span class="badge text-bg-warning">
+            <span class="status-text text-bg-warning">
                 <i class="fa-solid fa-clock me-1"></i>{{ number_format($statistics['pending_review']) }} waiting review
             </span>
         </x-slot:actions>
@@ -21,7 +21,7 @@
                     <div class="fw-semibold text-dark">Requests needing a decision</div>
                     <div class="small text-body-secondary">Review the employee, leave period and reason before approving or rejecting.</div>
                 </div>
-                <span class="badge text-bg-light border text-dark">Oldest requests first</span>
+                <span class="small text-body-secondary">Oldest requests first</span>
             </div>
 
             <div class="p-3 d-grid gap-3">
@@ -38,7 +38,7 @@
                                         <div class="min-w-0">
                                             <div class="d-flex flex-wrap align-items-center gap-2">
                                                 <h2 class="h6 mb-0 text-dark">{{ $empName }}</h2>
-                                                <span class="badge text-bg-warning"><i class="fa-solid fa-hourglass-half me-1"></i>Pending</span>
+                                                <span class="status-text text-bg-warning">Pending</span>
                                             </div>
                                             <div class="small text-body-secondary mt-1">{{ $leaveRequest->employee?->employee_code }}</div>
                                             <div class="small text-body-secondary">{{ $leaveRequest->employee?->department?->name ?? 'No department' }}</div>
@@ -59,18 +59,12 @@
                                 </div>
 
                                 <div class="col-12 col-lg-2">
-                                    <div class="d-flex flex-lg-column justify-content-end gap-2">
-                                        <form method="POST" action="{{ route('leave.requests.approve', $leaveRequest) }}" class="flex-fill">
-                                            @csrf
-                                            <input type="hidden" name="note" value="Approved">
-                                            <button class="btn btn-success btn-sm w-100" type="submit">
-                                                <i class="fa-solid fa-check me-1"></i>Approve
-                                            </button>
-                                        </form>
-                                        <button class="btn btn-outline-danger btn-sm flex-fill" type="button" data-bs-toggle="modal" data-bs-target="#rejectModal{{ $leaveRequest->id }}">
-                                            <i class="fa-solid fa-xmark me-1"></i>Reject
-                                        </button>
-                                    </div>
+                                    <x-decision-actions
+                                        class="justify-content-lg-end flex-lg-column"
+                                        :approve-url="route('leave.requests.approve', $leaveRequest)"
+                                        reject-target="#rejectModal{{ $leaveRequest->id }}"
+                                        :approve-fields="['note' => 'Approved']"
+                                    />
                                 </div>
                             </div>
 
