@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Attendance;
 use App\Models\AttendanceCorrection;
 use App\Models\AuditLog;
+use App\Models\Employee;
 use App\Models\PayrollPeriod;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,10 +19,8 @@ class AttendanceCorrectionController extends Controller
 {
     public function index(Request $request): View
     {
-        $employee = $request->user()->employee;
-        abort_unless($employee !== null, 403);
         $companyId = $this->currentCompanyId($request);
-        abort_unless((int) $employee->company_id === $companyId, 403);
+        $employee = $this->actorEmployee($request, $companyId);
 
         $attendances = Attendance::query()
             ->where('employee_id', $employee->id)
@@ -43,10 +42,8 @@ class AttendanceCorrectionController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $employee = $request->user()->employee;
-        abort_unless($employee !== null, 403);
         $companyId = $this->currentCompanyId($request);
-        abort_unless((int) $employee->company_id === $companyId, 403);
+        $employee = $this->actorEmployee($request, $companyId);
 
         $data = $request->validate([
             'attendance_id' => ['required', 'integer'],
@@ -59,6 +56,8 @@ class AttendanceCorrectionController extends Controller
             ->where('employee_id', $employee->id)
             ->whereHas('employee', fn (Builder $query) => $query->where('company_id', $companyId))
             ->firstOrFail();
+
+        $this->ensureAttendancePayrollIsOpen($attendance, $companyId);
         abort_if(AttendanceCorrection::query()->where('attendance_id', $attendance->id)->where('status', 'pending')->exists(), 422, 'A correction request for this attendance record is already pending.');
 
         $checkIn = filled($data['requested_check_in'] ?? null) ? CarbonImmutable::parse($data['requested_check_in']) : null;
@@ -88,14 +87,17 @@ class AttendanceCorrectionController extends Controller
     public function review(Request $request): View
     {
         $companyId = $this->currentCompanyId($request);
-        $actor = $request->user()->employee;
+        $actor = Employee::query()
+            ->where('user_id', $request->user()->id)
+            ->where('company_id', $companyId)
+            ->first();
         $query = AttendanceCorrection::query()
             ->with(['attendance', 'employee.branch', 'employee.department'])
             ->where('status', 'pending')
             ->whereHas('employee', fn (Builder $employees) => $employees->where('company_id', $companyId));
 
         if ($request->user()->hasRole('Manager') && ! $request->user()->hasAnyRole(['Owner', 'Super Admin', 'HR Administrator'])) {
-            abort_unless($actor !== null && (int) $actor->company_id === $companyId, 403);
+            abort_unless($actor !== null, 403);
             $query->whereHas('employee', fn (Builder $employees) => $employees
                 ->where('company_id', $companyId)
                 ->where('department_id', $actor->department_id)
@@ -110,11 +112,15 @@ class AttendanceCorrectionController extends Controller
     public function approve(Request $request, AttendanceCorrection $correction): RedirectResponse
     {
         $this->authorizeCorrection($request, $correction);
-        $this->ensurePayrollIsOpen($correction);
-        DB::transaction(function () use ($request, $correction): void {
+        $companyId = $this->currentCompanyId($request);
+
+        DB::transaction(function () use ($request, $correction, $companyId): void {
             $locked = AttendanceCorrection::query()->lockForUpdate()->findOrFail($correction->id);
             abort_unless($locked->status === 'pending', 422, 'This correction has already been reviewed.');
             $attendance = Attendance::query()->lockForUpdate()->findOrFail($locked->attendance_id);
+            abort_unless($attendance->employee()->where('company_id', $companyId)->exists(), 404);
+            $this->ensureAttendancePayrollIsOpen($attendance, $companyId);
+
             $before = ['check_in_at' => $attendance->check_in_at?->toISOString(), 'check_out_at' => $attendance->check_out_at?->toISOString(), 'status' => $attendance->status];
             $locked->approve($request->user(), trim((string) $request->input('note')));
             $attendance->refresh();
@@ -140,19 +146,20 @@ class AttendanceCorrectionController extends Controller
 
     public function reopen(Request $request, AttendanceCorrection $correction): RedirectResponse
     {
-        $employee = $request->user()->employee;
-        abort_unless($employee !== null, 403);
         $companyId = $this->currentCompanyId($request);
-        abort_unless((int) $employee->company_id === $companyId, 403);
-        abort_unless($correction->employee_id === $employee->id, 404);
+        $employee = $this->actorEmployee($request, $companyId);
+        abort_unless((int) $correction->employee_id === (int) $employee->id, 404);
         abort_unless($correction->employee()->where('company_id', $companyId)->exists(), 404);
         abort_unless($correction->status === 'rejected', 422, 'Only rejected correction requests can be reopened.');
         $data = $request->validate(['reason' => ['required', 'string', 'min:5', 'max:2000']]);
 
-        DB::transaction(function () use ($request, $correction, $data, $companyId): void {
+        DB::transaction(function () use ($request, $correction, $data, $companyId, $employee): void {
             $locked = AttendanceCorrection::query()->lockForUpdate()->findOrFail($correction->id);
-            abort_unless($locked->employee_id === $request->user()->employee->id && $locked->status === 'rejected', 422, 'This correction request cannot be reopened.');
+            abort_unless((int) $locked->employee_id === (int) $employee->id && $locked->status === 'rejected', 422, 'This correction request cannot be reopened.');
             abort_unless($locked->employee()->where('company_id', $companyId)->exists(), 404);
+            $attendance = Attendance::query()->lockForUpdate()->findOrFail($locked->attendance_id);
+            $this->ensureAttendancePayrollIsOpen($attendance, $companyId);
+
             $before = ['status' => $locked->status, 'review_note' => $locked->review_note];
             $locked->reopen($request->user(), trim($data['reason']));
             AuditLog::record($locked, 'reopened', $before, ['status' => 'pending', 'reason' => trim($data['reason'])]);
@@ -171,22 +178,35 @@ class AttendanceCorrectionController extends Controller
             return;
         }
 
-        $actor = $request->user()->employee;
-        abort_unless($actor && (int) $actor->company_id === $companyId, 403);
+        $actor = Employee::query()
+            ->where('user_id', $request->user()->id)
+            ->where('company_id', $companyId)
+            ->first();
+        abort_unless($actor !== null, 403);
         if ($request->user()->hasRole('Manager')) {
             abort_unless($correction->employee()->where('department_id', $actor->department_id)->whereKeyNot($actor->id)->exists(), 403);
         }
     }
 
-    private function ensurePayrollIsOpen(AttendanceCorrection $correction): void
+    private function actorEmployee(Request $request, int $companyId): Employee
     {
-        $attendance = $correction->attendance()->with('employee')->firstOrFail();
+        $employee = Employee::query()
+            ->where('user_id', $request->user()->id)
+            ->where('company_id', $companyId)
+            ->first();
+        abort_unless($employee !== null, 403);
+
+        return $employee;
+    }
+
+    private function ensureAttendancePayrollIsOpen(Attendance $attendance, int $companyId): void
+    {
         $locked = PayrollPeriod::query()
-            ->where('company_id', $attendance->employee->company_id)
+            ->where('company_id', $companyId)
             ->whereDate('start_date', '<=', $attendance->work_date)
             ->whereDate('end_date', '>=', $attendance->work_date)
             ->whereIn('status', ['approved', 'paid', 'closed'])
             ->exists();
-        abort_if($locked, 423, 'Attendance is locked by an approved or closed payroll period.');
+        abort_if($locked, 423, 'Attendance is locked by an approved, paid, or closed payroll period.');
     }
 }
