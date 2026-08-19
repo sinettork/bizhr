@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\Employee;
 use App\Models\EmployeeGoal;
 use App\Models\KpiTemplate;
@@ -20,14 +19,17 @@ class PerformanceController extends Controller
 {
     public function templates(Request $request): View
     {
-        $companyId = $this->companyId();
+        $companyId = $this->currentCompanyId($request);
 
-        return view('performance.templates', ['templates' => KpiTemplate::query()->with(['position', 'items'])->where('company_id', $companyId)->paginate($this->perPage($request, 20))->withQueryString(), 'positions' => Position::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('title')->get()]);
+        return view('performance.templates', [
+            'templates' => KpiTemplate::query()->with(['position', 'items'])->where('company_id', $companyId)->paginate($this->perPage($request, 20))->withQueryString(),
+            'positions' => Position::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('title')->get(),
+        ]);
     }
 
     public function storeTemplate(Request $request): RedirectResponse
     {
-        $companyId = $this->companyId();
+        $companyId = $this->currentCompanyId($request);
         $rawItems = $request->input('items');
         $items = [];
         if (is_array($rawItems)) {
@@ -44,7 +46,17 @@ class PerformanceController extends Controller
             }
         }
         $request->merge(['items' => $items]);
-        $data = $request->validate(['name' => ['required', 'string', 'max:255', Rule::unique('kpi_templates')->where('company_id', $companyId)->where('position_id', $request->input('position_id'))], 'description' => ['nullable', 'string', 'max:2000'], 'position_id' => ['nullable', Rule::exists('positions', 'id')->where('company_id', $companyId)], 'review_frequency' => ['required', 'in:monthly,quarterly,semiannual,annual'], 'items' => ['required', 'array', 'min:1'], 'items.*.name' => ['required', 'string', 'max:255'], 'items.*.measurement_unit' => ['required', 'string', 'max:30'], 'items.*.target_value' => ['required', 'numeric'], 'items.*.weight' => ['required', 'numeric', 'gt:0', 'lte:100']]);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255', Rule::unique('kpi_templates')->where('company_id', $companyId)->where('position_id', $request->input('position_id'))],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'position_id' => ['nullable', Rule::exists('positions', 'id')->where('company_id', $companyId)],
+            'review_frequency' => ['required', 'in:monthly,quarterly,semiannual,annual'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.name' => ['required', 'string', 'max:255'],
+            'items.*.measurement_unit' => ['required', 'string', 'max:30'],
+            'items.*.target_value' => ['required', 'numeric'],
+            'items.*.weight' => ['required', 'numeric', 'gt:0', 'lte:100'],
+        ]);
         $totalWeight = array_reduce($data['items'], fn (float $total, array $item): float => $total + (float) $item['weight'], 0.0);
         if (abs($totalWeight - 100) >= 0.001) {
             throw ValidationException::withMessages(['items' => 'KPI weights must total exactly 100%.']);
@@ -59,7 +71,7 @@ class PerformanceController extends Controller
 
     public function goals(Request $request): View
     {
-        $companyId = $this->companyId();
+        $companyId = $this->currentCompanyId($request);
         $goals = EmployeeGoal::query()->with('employee')->where('company_id', $companyId)->latest('due_date')->paginate($this->perPage($request, 20))->withQueryString();
 
         return view('performance.goals', ['goals' => $goals, 'employees' => Employee::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('full_name_en')->get()]);
@@ -67,8 +79,17 @@ class PerformanceController extends Controller
 
     public function storeGoal(Request $request): RedirectResponse
     {
-        $companyId = $this->companyId();
-        $data = $request->validate(['employee_id' => ['required', Rule::exists('employees', 'id')->where('company_id', $companyId)], 'title' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string', 'max:2000'], 'measurement_unit' => ['required', 'string', 'max:30'], 'target_value' => ['required', 'numeric'], 'weight' => ['required', 'numeric', 'gt:0', 'lte:100'], 'start_date' => ['required', 'date'], 'due_date' => ['required', 'date', 'after_or_equal:start_date']]);
+        $companyId = $this->currentCompanyId($request);
+        $data = $request->validate([
+            'employee_id' => ['required', Rule::exists('employees', 'id')->where('company_id', $companyId)],
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'measurement_unit' => ['required', 'string', 'max:30'],
+            'target_value' => ['required', 'numeric'],
+            'weight' => ['required', 'numeric', 'gt:0', 'lte:100'],
+            'start_date' => ['required', 'date'],
+            'due_date' => ['required', 'date', 'after_or_equal:start_date'],
+        ]);
         EmployeeGoal::query()->create([...$data, 'company_id' => $companyId, 'current_value' => 0, 'scoring_direction' => 'higher_is_better', 'status' => 'active', 'assigned_by' => $request->user()->id, 'activated_at' => now()]);
 
         return back()->with('status', 'Goal assigned.');
@@ -78,13 +99,20 @@ class PerformanceController extends Controller
     {
         $employee = $request->user()->employee;
         abort_unless($employee !== null, 403);
+        $companyId = $this->currentCompanyId($request);
+        abort_unless($employee->company_id === $companyId, 403);
 
-        return view('performance.my-goals', ['goals' => EmployeeGoal::query()->where('employee_id', $employee->id)->latest('due_date')->paginate($this->perPage($request, 20))->withQueryString()]);
+        return view('performance.my-goals', [
+            'goals' => EmployeeGoal::query()->where('company_id', $companyId)->where('employee_id', $employee->id)->latest('due_date')->paginate($this->perPage($request, 20))->withQueryString(),
+        ]);
     }
 
     public function updateGoal(Request $request, EmployeeGoal $goal): RedirectResponse
     {
-        abort_unless($goal->employee_id === $request->user()->employee?->id, 403);
+        $employee = $request->user()->employee;
+        abort_unless($employee !== null, 403);
+        abort_unless($goal->company_id === $this->currentCompanyId($request), 404);
+        abort_unless($goal->employee_id === $employee->id, 403);
         $data = $request->validate(['employee_reported_value' => ['required', 'numeric'], 'employee_note' => ['required', 'string', 'min:3', 'max:2000']]);
         abort_unless(in_array($goal->status, ['active', 'returned'], true), 422);
         $goal->update([...$data, 'status' => 'submitted', 'submitted_at' => now()]);
@@ -94,15 +122,23 @@ class PerformanceController extends Controller
 
     public function reviews(Request $request): View
     {
-        $companyId = $this->companyId();
+        $companyId = $this->currentCompanyId($request);
 
-        return view('performance.reviews', ['reviews' => PerformanceReview::query()->with(['employee.department', 'reviewer', 'scores'])->where('company_id', $companyId)->latest('period_end')->paginate($this->perPage($request, 20))->withQueryString(), 'employees' => Employee::query()->where('company_id', $companyId)->where('is_active', true)->get()]);
+        return view('performance.reviews', [
+            'reviews' => PerformanceReview::query()->with(['employee.department', 'reviewer', 'scores'])->where('company_id', $companyId)->latest('period_end')->paginate($this->perPage($request, 20))->withQueryString(),
+            'employees' => Employee::query()->where('company_id', $companyId)->where('is_active', true)->get(),
+        ]);
     }
 
     public function createReview(Request $request, PerformanceReviewService $service): RedirectResponse
     {
-        $data = $request->validate(['employee_id' => ['required', Rule::exists('employees', 'id')->where('company_id', $this->companyId())], 'period_start' => ['required', 'date'], 'period_end' => ['required', 'date', 'after_or_equal:period_start']]);
-        $employee = Employee::query()->whereKey($data['employee_id'])->where('company_id', $this->companyId())->firstOrFail();
+        $companyId = $this->currentCompanyId($request);
+        $data = $request->validate([
+            'employee_id' => ['required', Rule::exists('employees', 'id')->where('company_id', $companyId)],
+            'period_start' => ['required', 'date'],
+            'period_end' => ['required', 'date', 'after_or_equal:period_start'],
+        ]);
+        $employee = Employee::query()->whereKey($data['employee_id'])->where('company_id', $companyId)->firstOrFail();
         $this->runWorkflow(fn () => $service->create($employee, $request->user(), $data['period_start'], $data['period_end']));
 
         return back()->with('status', 'Performance review created from eligible goals.');
@@ -110,7 +146,7 @@ class PerformanceController extends Controller
 
     public function submitReview(Request $request, PerformanceReview $review, PerformanceReviewService $service): RedirectResponse
     {
-        abort_unless($review->company_id === $this->companyId(), 404);
+        abort_unless($review->company_id === $this->currentCompanyId($request), 404);
         $data = $request->validate([
             'scores' => ['required', 'array'], 'scores.*' => ['required', 'integer', 'between:1,5'],
             'comments' => ['nullable', 'array'], 'comments.*' => ['nullable', 'string', 'max:2000'],
@@ -125,14 +161,17 @@ class PerformanceController extends Controller
 
     public function transition(Request $request, PerformanceReview $review, string $action, PerformanceReviewService $service): RedirectResponse
     {
-        abort_unless($review->company_id === $this->companyId(), 404);
+        abort_unless($review->company_id === $this->currentCompanyId($request), 404);
         abort_unless(match ($action) {
             'approve', 'close' => $request->user()->can('performance.approve'),
             'reopen' => $request->user()->can('performance.reopen'),
             default => false,
         }, 403);
         $this->runWorkflow(fn () => match ($action) {
-            'approve' => $service->approve($review, $request->user()), 'close' => $service->close($review, $request->user()), 'reopen' => $service->reopen($review, $request->user(), (string) $request->validate(['reason' => ['required', 'string', 'min:15']])['reason']), default => abort(404)
+            'approve' => $service->approve($review, $request->user()),
+            'close' => $service->close($review, $request->user()),
+            'reopen' => $service->reopen($review, $request->user(), (string) $request->validate(['reason' => ['required', 'string', 'min:15']])['reason']),
+            default => abort(404),
         });
 
         return back()->with('status', 'Review workflow updated.');
@@ -142,22 +181,24 @@ class PerformanceController extends Controller
     {
         $employee = $request->user()->employee;
         abort_unless($employee !== null, 403);
+        $companyId = $this->currentCompanyId($request);
+        abort_unless($employee->company_id === $companyId, 403);
 
-        return view('performance.my-reviews', ['reviews' => PerformanceReview::query()->with('scores')->where('employee_id', $employee->id)->latest('period_end')->paginate($this->perPage($request, 20))->withQueryString()]);
+        return view('performance.my-reviews', [
+            'reviews' => PerformanceReview::query()->with('scores')->where('company_id', $companyId)->where('employee_id', $employee->id)->latest('period_end')->paginate($this->perPage($request, 20))->withQueryString(),
+        ]);
     }
 
     public function acknowledge(Request $request, PerformanceReview $review, PerformanceReviewService $service): RedirectResponse
     {
+        $employee = $request->user()->employee;
+        abort_unless($employee !== null, 403);
+        abort_unless($review->company_id === $this->currentCompanyId($request), 404);
+        abort_unless($review->employee_id === $employee->id, 403);
         $data = $request->validate(['comment' => ['nullable', 'string', 'max:2000']]);
-        abort_unless($review->company_id === $request->user()->employee->company_id, 404);
         $this->runWorkflow(fn () => $service->acknowledge($review, $request->user(), $data['comment'] ?? null));
 
         return back()->with('status', 'Review acknowledged.');
-    }
-
-    private function companyId(): int
-    {
-        return (int) Company::query()->value('id');
     }
 
     /** @param callable(): mixed $operation */
