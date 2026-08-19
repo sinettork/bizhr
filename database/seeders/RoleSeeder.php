@@ -29,11 +29,14 @@ class RoleSeeder extends Seeder
 
         $this->transferAliases();
 
-        $all = Permission::query()
-            ->where('guard_name', 'web')
-            ->pluck('name')
-            ->map(fn ($name): string => (string) $name)
-            ->all();
+        /** @var list<string> $all */
+        $all = array_values(
+            Permission::query()
+                ->where('guard_name', 'web')
+                ->pluck('name')
+                ->map(fn ($name): string => (string) $name)
+                ->all()
+        );
 
         $this->sync('Super Admin', $all);
         $this->sync('Owner', $all);
