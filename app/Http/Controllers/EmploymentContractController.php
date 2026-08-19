@@ -90,12 +90,17 @@ class EmploymentContractController extends Controller
         }
 
         $file = $request->file('document');
+        $path = null;
+        $originalName = null;
         if ($file instanceof UploadedFile) {
             $fileSecurity->assertSafe($file, 'document');
+            $storedPath = $file->store('employment-contracts/'.$companyId.'/'.$employee->id, $this->contractsDisk());
+            if (! is_string($storedPath)) {
+                throw new RuntimeException('Unable to store the employment contract document.');
+            }
+            $path = $storedPath;
+            $originalName = $file->getClientOriginalName();
         }
-        $path = $file instanceof UploadedFile
-            ? $file->store('employment-contracts/'.$companyId.'/'.$employee->id, $this->contractsDisk())
-            : null;
 
         $contract = EmploymentContract::create([
             ...array_diff_key($data, ['document' => true]),
@@ -104,7 +109,7 @@ class EmploymentContractController extends Controller
             'department_name' => $employee->department?->name,
             'branch_name' => $employee->branch?->name,
             'document_path' => $path,
-            'original_name' => $file?->getClientOriginalName(),
+            'original_name' => $originalName,
             'renewal_notice_date' => $this->renewalNoticeDate($data['start_date'], $data['end_date'] ?? null),
             'status' => 'draft',
         ]);
@@ -147,10 +152,7 @@ class EmploymentContractController extends Controller
     public function mine(Request $request): View
     {
         $companyId = $this->currentCompanyId($request);
-        $employee = Employee::query()
-            ->where('company_id', $companyId)
-            ->where('user_id', $request->user()->id)
-            ->first();
+        $employee = Employee::query()->where('user_id', $request->user()->id)->where('company_id', $companyId)->first();
         abort_unless($employee !== null, 403);
         $contracts = EmploymentContract::query()
             ->where('company_id', $companyId)
