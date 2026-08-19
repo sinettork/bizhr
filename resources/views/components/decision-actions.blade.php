@@ -7,6 +7,8 @@
     'rejectIcon' => 'fa-xmark',
     'compact' => true,
     'approveFields' => [],
+    'approveConfirm' => 'Approve this request? Please confirm before continuing.',
+    'approveConfirmTitle' => 'Confirm approval',
 ])
 
 <div {{ $attributes->class(['d-flex flex-wrap gap-2 decision-actions']) }}>
@@ -14,7 +16,14 @@
         <i class="fa-solid {{ $rejectIcon }} me-1"></i>{{ $rejectLabel }}
     </button>
 
-    <form method="POST" action="{{ $approveUrl }}">
+    <form
+        method="POST"
+        action="{{ $approveUrl }}"
+        data-confirm="{{ $approveConfirm }}"
+        data-confirm-title="{{ $approveConfirmTitle }}"
+        data-confirm-action="{{ $approveLabel }}"
+        data-confirm-tone="success"
+    >
         @csrf
         @foreach($approveFields as $name => $value)
             <input type="hidden" name="{{ $name }}" value="{{ $value }}">
