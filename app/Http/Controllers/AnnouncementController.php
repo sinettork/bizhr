@@ -4,17 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Models\Announcement;
 use App\Models\Branch;
-use App\Models\Company;
 use App\Models\Department;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class AnnouncementController extends Controller
 {
     public function index(Request $request): View
     {
-        $companyId = $this->companyId();
+        $companyId = $this->currentCompanyId($request);
         $announcements = Announcement::query()->withCount('acknowledgements')->where('company_id', $companyId)->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%'.trim($request->string('search')).'%'))->latest('is_pinned')->latest('published_at')->paginate($this->perPage($request, 20))->withQueryString();
 
         return view('announcements.index', ['announcements' => $announcements, 'branches' => Branch::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get(), 'departments' => Department::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get()]);
@@ -22,8 +22,8 @@ class AnnouncementController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $this->validated($request);
-        $companyId = $this->companyId();
+        $companyId = $this->currentCompanyId($request);
+        $data = $this->validated($request, $companyId);
         $this->audienceScope($data, $companyId);
         Announcement::query()->create(['company_id' => $companyId, 'created_by' => $request->user()->id, ...$data, 'published_at' => $request->boolean('publish_now') ? now() : ($data['published_at'] ?? null), 'is_pinned' => $request->boolean('is_pinned'), 'is_urgent' => $request->boolean('is_urgent'), 'requires_acknowledgement' => $request->boolean('requires_acknowledgement')]);
         $response = back()->with('status', 'Announcement created.');
@@ -33,25 +33,26 @@ class AnnouncementController extends Controller
 
     public function update(Request $request, Announcement $announcement): RedirectResponse
     {
-        abort_unless($announcement->company_id === $this->companyId(), 404);
-        $data = $this->validated($request);
-        $this->audienceScope($data, $announcement->company_id);
+        $companyId = $this->currentCompanyId($request);
+        abort_unless((int) $announcement->company_id === $companyId, 404);
+        $data = $this->validated($request, $companyId);
+        $this->audienceScope($data, $companyId);
         $announcement->update([...$data, 'is_pinned' => $request->boolean('is_pinned'), 'is_urgent' => $request->boolean('is_urgent'), 'requires_acknowledgement' => $request->boolean('requires_acknowledgement')]);
 
         return back()->with('status', 'Announcement updated.');
     }
 
-    public function publish(Announcement $announcement): RedirectResponse
+    public function publish(Request $request, Announcement $announcement): RedirectResponse
     {
-        abort_unless($announcement->company_id === $this->companyId(), 404);
+        abort_unless((int) $announcement->company_id === $this->currentCompanyId($request), 404);
         $announcement->update(['published_at' => now()]);
 
         return back()->with('status', 'Announcement published.');
     }
 
-    public function destroy(Announcement $announcement): RedirectResponse
+    public function destroy(Request $request, Announcement $announcement): RedirectResponse
     {
-        abort_unless($announcement->company_id === $this->companyId(), 404);
+        abort_unless((int) $announcement->company_id === $this->currentCompanyId($request), 404);
         $announcement->delete();
 
         return back()->with('status', 'Announcement archived.');
@@ -59,8 +60,11 @@ class AnnouncementController extends Controller
 
     public function feed(Request $request): View
     {
+        $companyId = $this->currentCompanyId($request);
         $employee = $request->user()->employee;
-        $companyId = $employee->company_id ?? $this->companyId();
+        if ($employee !== null) {
+            abort_unless((int) $employee->company_id === $companyId, 403);
+        }
         $items = Announcement::query()->withExists(['acknowledgements as acknowledged_by_me' => fn ($query) => $query->where('users.id', $request->user()->id)])->where('company_id', $companyId)->whereNotNull('published_at')->where('published_at', '<=', now())->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>=', now()))->when($employee, fn ($q) => $q->where(fn ($audience) => $audience->where('audience_type', 'all')->orWhere(fn ($x) => $x->where('audience_type', 'branch')->where('branch_id', $employee->branch_id))->orWhere(fn ($x) => $x->where('audience_type', 'department')->where('department_id', $employee->department_id))))->latest('is_urgent')->latest('is_pinned')->latest('published_at')->paginate($this->perPage($request, 20))->withQueryString();
 
         return view('announcements.feed', compact('items'));
@@ -68,8 +72,12 @@ class AnnouncementController extends Controller
 
     public function acknowledge(Request $request, Announcement $announcement): RedirectResponse
     {
+        $companyId = $this->currentCompanyId($request);
         $employee = $request->user()->employee;
-        abort_unless($announcement->company_id === ($employee->company_id ?? $this->companyId()), 404);
+        abort_unless((int) $announcement->company_id === $companyId, 404);
+        if ($employee !== null) {
+            abort_unless((int) $employee->company_id === $companyId, 403);
+        }
         abort_unless($announcement->audience_type === 'all'
             || ($announcement->audience_type === 'branch' && $employee !== null && $announcement->branch_id === $employee->branch_id)
             || ($announcement->audience_type === 'department' && $employee !== null && $announcement->department_id === $employee->department_id), 404);
@@ -80,9 +88,17 @@ class AnnouncementController extends Controller
     }
 
     /** @return array{title: string, content: string, audience_type: string, branch_id: int|null, department_id: int|null, expires_at: string|null, published_at: string|null} */
-    private function validated(Request $request): array
+    private function validated(Request $request, int $companyId): array
     {
-        return $request->validate(['title' => ['required', 'string', 'max:200'], 'content' => ['required', 'string', 'max:10000'], 'audience_type' => ['required', 'in:all,branch,department'], 'branch_id' => ['nullable', 'integer', 'exists:branches,id'], 'department_id' => ['nullable', 'integer', 'exists:departments,id'], 'published_at' => ['nullable', 'date'], 'expires_at' => ['nullable', 'date', 'after:published_at']]);
+        return $request->validate([
+            'title' => ['required', 'string', 'max:200'],
+            'content' => ['required', 'string', 'max:10000'],
+            'audience_type' => ['required', 'in:all,branch,department'],
+            'branch_id' => ['nullable', 'integer', Rule::exists('branches', 'id')->where('company_id', $companyId)],
+            'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('company_id', $companyId)],
+            'published_at' => ['nullable', 'date'],
+            'expires_at' => ['nullable', 'date', 'after:published_at'],
+        ]);
     }
 
     /** @param array{title: string, content: string, audience_type: string, branch_id: int|null, department_id: int|null, expires_at: string|null, published_at: string|null} $data */
@@ -90,17 +106,15 @@ class AnnouncementController extends Controller
     {
         if ($data['audience_type'] !== 'branch') {
             $data['branch_id'] = null;
-        } if ($data['audience_type'] !== 'department') {
+        }
+        if ($data['audience_type'] !== 'department') {
             $data['department_id'] = null;
-        } if ($data['branch_id']) {
+        }
+        if ($data['branch_id']) {
             abort_unless(Branch::query()->whereKey($data['branch_id'])->where('company_id', $companyId)->exists(), 404);
-        } if ($data['department_id']) {
+        }
+        if ($data['department_id']) {
             abort_unless(Department::query()->whereKey($data['department_id'])->where('company_id', $companyId)->exists(), 404);
         }
-    }
-
-    private function companyId(): int
-    {
-        return (int) Company::query()->value('id');
     }
 }
