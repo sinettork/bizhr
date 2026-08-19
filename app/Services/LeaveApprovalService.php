@@ -191,7 +191,7 @@ class LeaveApprovalService
             '/leave/requests',
             'calendar-check',
             $level,
-            ['leave_request_id' => $leaveRequest->public_id],
+            ['leave_request_id' => (string) $leaveRequest->getRouteKey()],
             (int) $leaveRequest->employee->company_id,
         );
     }
