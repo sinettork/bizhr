@@ -11,6 +11,8 @@ use App\Services\AssetWorkflowService;
 use App\Services\EmploymentContractService;
 use App\Services\PayrollCalculatorService;
 use App\Services\TaskWorkflowService;
+use DomainException;
+use Illuminate\Validation\ValidationException;
 
 function companyUser(Company $company): User
 {
@@ -39,7 +41,7 @@ it('rejects payroll processing by a user from another company', function () {
     ]);
 
     expect(fn () => app(PayrollCalculatorService::class)->generate($period, $actor))
-        ->toThrow(\DomainException::class, 'processor does not belong');
+        ->toThrow(DomainException::class, 'processor does not belong');
 });
 
 it('rejects task workflow changes by a user from another company', function () {
@@ -61,7 +63,7 @@ it('rejects task workflow changes by a user from another company', function () {
     ]);
 
     expect(fn () => app(TaskWorkflowService::class)->cancel($task, $actor, 'Security boundary test'))
-        ->toThrow(\DomainException::class, 'does not belong');
+        ->toThrow(DomainException::class, 'does not belong');
 });
 
 it('rejects contract workflow changes by a user from another company', function () {
@@ -82,7 +84,7 @@ it('rejects contract workflow changes by a user from another company', function 
     ]);
 
     expect(fn () => app(EmploymentContractService::class)->submit($contract, $actor))
-        ->toThrow(\Illuminate\Validation\ValidationException::class);
+        ->toThrow(ValidationException::class);
 });
 
 it('rejects asset assignment by a user from another company', function () {
@@ -102,5 +104,5 @@ it('rejects asset assignment by a user from another company', function () {
     ]);
 
     expect(fn () => app(AssetWorkflowService::class)->assign($asset, $employee, $actor, 'good', null))
-        ->toThrow(\DomainException::class, 'does not belong');
+        ->toThrow(DomainException::class, 'does not belong');
 });
