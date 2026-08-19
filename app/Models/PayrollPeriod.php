@@ -9,11 +9,43 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class PayrollPeriod extends Model
 {
-    protected $fillable = ['company_id', 'name', 'start_date', 'end_date', 'payment_date', 'status', 'processed_by', 'processed_at', 'approved_by', 'approved_at', 'notes', 'tax_exchange_rate_khr', 'tax_rate_date', 'tax_rate_source', 'tax_rate_locked_at'];
+    protected $fillable = [
+        'company_id',
+        'name',
+        'start_date',
+        'end_date',
+        'payment_date',
+        'status',
+        'processed_by',
+        'processed_at',
+        'approved_by',
+        'approved_at',
+        'notes',
+        'tax_exchange_rate_khr',
+        'tax_rate_date',
+        'tax_rate_source',
+        'tax_rate_locked_at',
+        'closed_by',
+        'closed_at',
+        'close_reason',
+        'reopened_by',
+        'reopened_at',
+        'reopen_reason',
+    ];
 
     protected function casts(): array
     {
-        return ['start_date' => 'date', 'end_date' => 'date', 'payment_date' => 'date', 'tax_rate_date' => 'date', 'processed_at' => 'datetime', 'approved_at' => 'datetime', 'tax_rate_locked_at' => 'datetime'];
+        return [
+            'start_date' => 'date',
+            'end_date' => 'date',
+            'payment_date' => 'date',
+            'tax_rate_date' => 'date',
+            'processed_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'tax_rate_locked_at' => 'datetime',
+            'closed_at' => 'datetime',
+            'reopened_at' => 'datetime',
+        ];
     }
 
     /** @return BelongsTo<Company, $this> */
@@ -50,5 +82,17 @@ class PayrollPeriod extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function closedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'closed_by');
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function reopenedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reopened_by');
     }
 }
