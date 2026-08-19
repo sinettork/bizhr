@@ -116,6 +116,63 @@ class PayrollWorkflowService
         });
     }
 
+    public function close(PayrollPeriod $period, User $actor, string $reason): PayrollPeriod
+    {
+        return DB::transaction(function () use ($period, $actor, $reason): PayrollPeriod {
+            $period = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
+            $this->assertSameCompany($period, $actor);
+
+            if (! $actor->hasAnyRole(['Payroll Officer', 'HR Administrator', 'Owner', 'Super Admin'])) {
+                abort(403);
+            }
+
+            if ($period->status !== 'paid' || ! $period->payment()->exists()) {
+                throw ValidationException::withMessages([
+                    'status' => 'Only a paid payroll period with a recorded payment can be closed.',
+                ]);
+            }
+
+            $period->update([
+                'status' => 'closed',
+                'closed_by' => $actor->id,
+                'closed_at' => now(),
+                'close_reason' => trim($reason),
+                'reopened_by' => null,
+                'reopened_at' => null,
+                'reopen_reason' => null,
+            ]);
+
+            return $period->fresh();
+        });
+    }
+
+    public function reopen(PayrollPeriod $period, User $actor, string $reason): PayrollPeriod
+    {
+        return DB::transaction(function () use ($period, $actor, $reason): PayrollPeriod {
+            $period = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
+            $this->assertSameCompany($period, $actor);
+
+            if (! $actor->hasAnyRole(['Owner', 'Super Admin'])) {
+                abort(403);
+            }
+
+            if ($period->status !== 'closed' || ! $period->payment()->exists()) {
+                throw ValidationException::withMessages([
+                    'status' => 'Only a closed payroll period with its original payment record can be reopened.',
+                ]);
+            }
+
+            $period->update([
+                'status' => 'paid',
+                'reopened_by' => $actor->id,
+                'reopened_at' => now(),
+                'reopen_reason' => trim($reason),
+            ]);
+
+            return $period->fresh();
+        });
+    }
+
     private function assertSameCompany(PayrollPeriod $period, User $actor): void
     {
         if ($actor->companyId() !== (int) $period->company_id) {
