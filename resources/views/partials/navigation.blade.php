@@ -9,6 +9,7 @@
         : null;
 
     $checkAttendance = $can('attendance.checkin') || $can('attendance.checkout');
+    $manageAttendance = $can('attendance.approve') || $can('attendance.report');
 
     $groups = array_filter([
         ['People', 'fa-users', [
@@ -19,15 +20,14 @@
             $item('Employment contracts', 'fa-file-signature', 'contracts.index', 'contracts.*', $can('contract.view')),
         ]],
         ['Time & Attendance', 'fa-clock', [
-            $item('Check in / out', 'fa-user-clock', 'attendance.checkinout', 'attendance.checkinout', $checkAttendance),
+            $item('Attendance overview', 'fa-user-clock', 'attendance.checkinout', 'attendance.checkinout', $manageAttendance),
             $item('Schedules', 'fa-calendar-days', 'schedules.index', 'schedules.*', $can('schedule.view')),
             $item('Work shifts', 'fa-clock-rotate-left', 'work-shifts.index', 'work-shifts.*', $can('shift.view')),
-            $item('Attendance QR', 'fa-qrcode', 'attendance.qr.display', 'attendance.qr.*', $can('attendance.approve') || $can('attendance.report')),
+            $item('Attendance QR', 'fa-qrcode', 'attendance.qr.display', 'attendance.qr.*', $manageAttendance),
             $item('Corrections', 'fa-clipboard-check', 'attendance.corrections.review', 'attendance.corrections.*', $can('attendance.approve')),
             $item('Reports', 'fa-chart-column', 'attendance.reports.index', 'attendance.reports.*', $can('attendance.report')),
         ]],
         ['Leave', 'fa-calendar-check', [
-            $item('My requests', 'fa-paper-plane', 'leave.requests.index', 'leave.requests.index', $can('leave.request')),
             $item('Approvals', 'fa-list-check', 'leave.requests.review', 'leave.requests.review', $can('leave.approve')),
             $item('Balances', 'fa-chart-pie', 'leave.balances.index', 'leave.balances.*', $can('leave.report') || $can('leave.manage')),
             $item('Leave types', 'fa-calendar-xmark', 'leave.types.index', 'leave.types.*', $can('leave.manage')),
@@ -50,7 +50,6 @@
             $item('Training', 'fa-graduation-cap', 'training.index', 'training.index', $can('training.view')),
             $item('Assets', 'fa-boxes-stacked', 'assets.index', 'assets.index', $can('asset.view')),
             $item('Expenses', 'fa-receipt', 'expenses.index', 'expenses.index', $can('expense.view')),
-            $item('Announcements', 'fa-bullhorn', 'announcements.feed', 'announcements.feed', $can('announcement.view')),
             $item('Manage announcements', 'fa-pen-to-square', 'announcements.index', 'announcements.index', $can('announcement.manage')),
         ]],
         ['Company', 'fa-building', [
@@ -67,6 +66,7 @@
     ], fn (array $group) => count(array_filter($group[2])) > 0);
 
     $personalItems = array_values(array_filter([
+        $item('My attendance', 'fa-user-clock', 'attendance.checkinout', 'attendance.checkinout', $checkAttendance),
         $item('My leave', 'fa-calendar-check', 'leave.requests.index', 'leave.requests.index', $can('leave.request')),
         $item('My payslips', 'fa-wallet', 'payroll.my-payslips', 'payroll.my-payslips', $can('payroll.view-own')),
         $item('My goals', 'fa-flag', 'performance.my-goals', 'performance.my-goals', $can('performance.view-own')),
@@ -76,6 +76,7 @@
         $item('My assets', 'fa-laptop', 'assets.mine', 'assets.mine', $can('asset.view-own')),
         $item('My expenses', 'fa-money-bill-wave', 'expenses.mine', 'expenses.mine', $can('expense.view-own')),
         $item('My contracts', 'fa-file-lines', 'contracts.mine', 'contracts.mine', $can('contract.view-own')),
+        $item('Announcements', 'fa-bullhorn', 'announcements.feed', 'announcements.feed', $can('announcement.view')),
     ]));
 @endphp
 
@@ -148,6 +149,29 @@
                 <span class="app-sidebar-icon"><i class="fa-solid fa-gauge-high"></i></span>
                 <span>Dashboard</span>
             </a>
+
+            @if(count($personalItems))
+                @php
+                    $personalActive = collect($personalItems)->contains(fn ($link) => request()->routeIs($link['active']));
+                @endphp
+                <div class="app-sidebar-group">
+                    <button class="app-sidebar-group-toggle {{ $personalActive ? 'active' : '' }}" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-my-workspace" aria-expanded="{{ $personalActive ? 'true' : 'false' }}" aria-controls="sidebar-my-workspace">
+                        <span class="app-sidebar-icon"><i class="fa-solid fa-user-check"></i></span>
+                        <span class="flex-grow-1 text-start">My workspace</span>
+                        <i class="fa-solid fa-chevron-down app-sidebar-chevron"></i>
+                    </button>
+                    <div class="collapse {{ $personalActive ? 'show' : '' }}" id="sidebar-my-workspace" data-bs-parent="#appSidebarMenu">
+                        <div class="app-sidebar-submenu">
+                            @foreach($personalItems as $link)
+                                <a class="app-sidebar-link app-sidebar-sublink {{ request()->routeIs($link['active']) ? 'active' : '' }}" href="{{ route($link['route']) }}">
+                                    <span class="app-sidebar-subdot"></span>
+                                    <span>{{ $link['label'] }}</span>
+                                </a>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            @endif
 
             @foreach($groups as [$heading, $groupIcon, $items])
                 @php
