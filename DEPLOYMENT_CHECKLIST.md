@@ -1,196 +1,152 @@
-# BizHR Deployment Readiness Checklist
+# BizHR Production Readiness Checklist
 
-## 🚀 Option A: Separate Services (Recommended)
+**Last updated:** 2026-08-19  
+**Current status:** Application validation green; deployment architecture decision pending.
 
-### Frontend (Vercel)
-- [x] `vercel.json` created ✅
-- [x] Vite build tested ✅  
-- [x] `.vercelignore` configured ✅
-- [x] `VERCEL_DEPLOYMENT.md` ready ✅
-- [ ] Environment variables configured in Vercel dashboard
-- [ ] GitHub connected to Vercel
-- [ ] Deploy with `vercel --prod`
+> This document tracks go-live readiness. It intentionally does not declare a final hosting architecture yet. The deployment architecture and PostgreSQL backup ownership will be finalized after the application-level production checks.
 
-### Backend (Railway)
-- [x] `Dockerfile` created ✅
-- [x] Docker config (nginx, supervisord) ✅
-- [x] `.env.production.example` updated ✅
-- [x] `RAILWAY_DEPLOYMENT.md` ready ✅
-- [ ] Railway account created
-- [ ] PostgreSQL database provisioned
-- [ ] Redis cache provisioned  
-- [ ] AWS S3 bucket configured
-- [ ] SMTP provider configured (SendGrid, etc.)
-- [ ] Deploy with `railway up`
+## 1. Application validation
 
----
+- [x] Full Laravel test suite passes locally
+- [x] Laravel Pint style checks pass
+- [x] PHPStan static analysis passes
+- [x] Production config cache builds
+- [x] Production route cache builds
+- [x] Blade view cache builds
+- [x] Scheduler can be listed successfully
+- [x] PostgreSQL-compatible CI workflow configured
+- [x] Strict public UUID route binding enabled
+- [x] Cross-company/tenant regression protections added
+- [x] Private HR file authorization regression coverage added
+- [x] Payroll concurrency/idempotency coverage added
+- [x] Import preview ownership/company/expiry safeguards added
+- [x] Export duplicate-delivery protection added
 
-## 📋 Deployment Steps
+## 2. Production environment
 
-### Phase 1: Backend (Railway) - First!
-1. Create Railway account
-2. Run: `npm i -g @railway/cli && railway login`
-3. Run: `railway init` in project root
-4. Add PostgreSQL & Redis services
-5. Configure environment variables (see `.env.production.example`)
-6. Deploy: `railway up`
-7. Verify: `curl https://your-api.up.railway.app/health`
+- [x] `APP_DEBUG=false` documented in `.env.production.example`
+- [x] HTTPS application URL documented
+- [x] Secure session cookie settings documented
+- [x] PostgreSQL TLS (`DB_SSLMODE=require`) documented
+- [x] Redis sessions/cache/queue documented
+- [x] Private object storage configuration documented
+- [x] SMTP configuration documented
+- [x] Attendance QR public HTTPS URL and tuning variables documented
+- [x] Production upload scanner (`clamscan`) documented
+- [ ] Real production secrets configured in hosting environment
+- [ ] Production database provisioned
+- [ ] Production Redis provisioned
+- [ ] Production private object storage bucket provisioned
+- [ ] Production SMTP credentials configured
+- [ ] ClamAV availability verified in the final runtime
 
-### Phase 2: Frontend (Vercel) - After Backend
-1. Create Vercel account
-2. Option A: Connect GitHub repo to Vercel dashboard
-   - OR Option B: Run `npm i -g vercel && vercel --prod`
-3. Set `VITE_API_URL` env var in Vercel dashboard
-4. Verify deployment at `https://your-app.vercel.app`
+## 3. Data protection and security
 
-### Phase 3: Connect & Test
-1. Update backend `FRONTEND_URL` env var: `https://your-app.vercel.app`
-2. Test API calls from frontend
-3. Test user authentication flow
-4. Run: `npm run build` locally to verify
-5. Check browser console for CORS/API errors
+- [x] Company context fails closed instead of selecting the first tenant
+- [x] Core HR workflows enforce company ownership at controller/service boundaries
+- [x] Employee sensitive profile data is permission-gated
+- [x] Employee documents use private storage
+- [x] Employment contract documents use private storage
+- [x] Recruitment CVs use private storage
+- [x] Expense receipts use private storage
+- [x] Private employee profile photos supported
+- [x] Audit logs carry company context
+- [x] Global role-definition mutation restricted to Super Admin
+- [x] Numeric internal IDs no longer resolve as public route bindings
+- [ ] Production trusted-proxy/IP configuration verified on final host
+- [ ] Production security headers verified over HTTPS
+- [ ] Final dependency security audit run with working internet access
 
----
+## 4. Runtime operations
 
-## 🔒 Security Checklist
+- [x] Queue connection is production-configurable
+- [x] Scheduler definitions load successfully
+- [x] Export jobs are retry/idempotency protected
+- [x] Application health endpoint available at `/up`
+- [ ] Queue worker process configured on final host
+- [ ] Scheduler process/cron configured on final host
+- [ ] Failed-job monitoring/alerting configured
+- [ ] Error tracking configured
+- [ ] Uptime monitoring configured
+- [ ] Log retention reviewed
 
-- [ ] `APP_DEBUG=false` in production `.env`
-- [ ] `APP_KEY` generated and stored securely
-- [ ] Database credentials use strong passwords
-- [ ] Redis password configured
-- [ ] AWS S3 credentials for uploads
-- [ ] CORS configured to allow only your Vercel domain
-- [ ] SSL certificates (auto on Railway/Vercel)
-- [ ] Trusted proxies configured for IP logging
-- [ ] Session/cookie settings use HTTPS
-- [ ] No secrets in `.env.production.example`
+## 5. Storage and backups
 
----
+- [x] Production file storage can use private S3-compatible object storage
+- [x] Employee/HR private files are company-namespaced where applicable
+- [ ] Final PostgreSQL backup owner/service selected
+- [ ] Automated production database backups enabled
+- [ ] Restore procedure documented
+- [ ] Restore test completed successfully
+- [ ] Object-storage retention/versioning policy reviewed
 
-## 📦 Environment Variables
+## 6. Payroll go-live
 
-### Vercel (Frontend)
-```
-VITE_API_URL=https://your-api.up.railway.app
-VITE_APP_NAME=BizHR
-```
+- [x] Payroll workflow lifecycle implemented
+- [x] Payroll period locking/concurrency protections covered by tests
+- [x] Duplicate/stale payroll processing guarded
+- [x] Payment creation rollback behavior covered
+- [x] Employee payroll access remains company-scoped
+- [ ] Client confirms current statutory/tax configuration
+- [ ] Client confirms production USD/KHR exchange-rate operating procedure
+- [ ] Real sample payroll reconciled against client-approved expected totals
+- [ ] Payroll sign-off completed by authorized client representative
 
-### Railway (Backend)
-```
-APP_ENV=production
-APP_DEBUG=false
-APP_KEY=<generate>
-APP_URL=https://your-api.up.railway.app
-FRONTEND_URL=https://your-app.vercel.app
+## 7. Attendance and QR go-live
 
-DB_CONNECTION=pgsql
-DB_HOST=railway-internal-host
-DB_DATABASE=postgres
-DB_USERNAME=postgres
-DB_PASSWORD=<strong-password>
+- [x] QR sessions are company/branch scoped
+- [x] QR expiry and one-session protections implemented
+- [x] Phone-accessible public QR URL is configurable
+- [x] GPS accuracy threshold configurable
+- [x] Attendance correction/payroll-lock workflow protections implemented
+- [ ] Final production HTTPS QR scan tested on real employee phones
+- [ ] Production geofence/location values confirmed for each branch
+- [ ] Camera/location permission UX tested on supported mobile browsers
 
-CACHE_STORE=redis
-QUEUE_CONNECTION=redis
-REDIS_HOST=railway-internal-host
-REDIS_PASSWORD=<strong-password>
+## 8. Client acceptance
 
-AWS_ACCESS_KEY_ID=<s3-key>
-AWS_SECRET_ACCESS_KEY=<s3-secret>
-AWS_BUCKET=<bucket-name>
+Complete these scenarios using production-like accounts and data:
 
-MAIL_HOST=smtp.sendgrid.net
-MAIL_USERNAME=apikey
-MAIL_PASSWORD=<sendgrid-api-key>
-```
+- [ ] Company/branch/department/position setup
+- [ ] Employee create/edit/archive/rehire lifecycle
+- [ ] Employee self-service access
+- [ ] Leave request/approval/rejection/balance adjustment
+- [ ] Attendance check-in/check-out/QR/correction/reports
+- [ ] Payroll create/process/review/approve/pay/lock/payslip
+- [ ] Asset create/assign/return/lost/retire
+- [ ] Employment contract create/submit/approve/download/renewal
+- [ ] Recruitment vacancy/candidate/interview/offer workflow
+- [ ] Task assignment/progress/verification
+- [ ] Training assignment/completion/history
+- [ ] Performance goals/reviews/acknowledgement
+- [ ] Expense submit/review/pay/receipt download
+- [ ] Import preview/confirm and export download
+- [ ] Cross-company access denial with privileged accounts
+- [ ] Mobile/tablet UX review
+- [ ] Khmer copy review by client
 
----
+## 9. Repository and release hygiene
 
-## 🧪 Testing Pre-Deployment
+- [x] Laravel runtime cache directories added to `.gitignore`
+- [ ] Remove previously tracked `storage/framework/views/*` runtime files from Git index
+- [ ] Confirm `git status` clean after cache cleanup
+- [ ] Create final release/production branch or tag after approval
+- [ ] Record rollback commit/tag
 
-### Local Testing
-```bash
-# Test build
-npm run build
+## 10. Deployment architecture — final decision pending
 
-# Test Laravel build
-php artisan config:cache
-php artisan route:cache
+This section is intentionally deferred until the application-level checks above are complete.
 
-# Run tests (if applicable)
-npm run test
-composer test
-```
+Before production deployment, decide and document:
 
-### Post-Deployment Testing
-1. [ ] Frontend loads at Vercel URL
-2. [ ] API calls reach backend
-3. [ ] Database queries work (check logs)
-4. [ ] File uploads to S3 work
-5. [ ] Emails send via SMTP
-6. [ ] Sessions persist across page reloads
-7. [ ] Queue jobs process (if used)
-8. [ ] Cache hits work
+- [ ] Whether BizHR will run as one Laravel application service or use separated services
+- [ ] Final application hosting provider
+- [ ] Final PostgreSQL provider
+- [ ] Final Redis provider
+- [ ] Final private object-storage provider
+- [ ] Queue worker and scheduler topology
+- [ ] Database backup/restore ownership
+- [ ] Deployment and rollback procedure
+- [ ] DNS, TLS, health checks and monitoring
 
----
-
-## 📊 Cost Estimates
-
-| Service | Tier | Monthly Cost |
-|---------|------|--------------|
-| Vercel | Free/Pro | $0-20 |
-| Railway PostgreSQL | Basic | $5-10 |
-| Railway Redis | Basic | $5-10 |
-| AWS S3 + Transfer | Usage | $5-50+ |
-| SendGrid (Email) | Free/Paid | $0-40+ |
-| **Total** | | **$15-130+** |
-
----
-
-## 🔧 Troubleshooting
-
-### Frontend won't connect to backend
-- Check `VITE_API_URL` is set in Vercel dashboard
-- Check backend CORS configuration
-- Verify backend is running: `curl https://your-api.up.railway.app/health`
-
-### Database migration fails on Railway
-```bash
-railway shell
-php artisan migrate --force
-```
-
-### Queue jobs not processing
-- Check Supervisor is running: `railway shell → supervisorctl status`
-- Monitor: `php artisan queue:failed`
-
-### Build fails on Vercel
-- Check `vercel.json` build command matches `package.json`
-- Run locally: `npm run build`
-- Check logs: `vercel logs`
-
----
-
-## 📚 Documentation
-
-- **VERCEL_DEPLOYMENT.md** - Frontend setup details
-- **RAILWAY_DEPLOYMENT.md** - Backend setup details
-
----
-
-## ✅ Final Pre-Launch Checklist
-
-- [ ] All environment variables configured
-- [ ] Migrations run on production database
-- [ ] Backups configured
-- [ ] Monitoring set up (error tracking, uptime)
-- [ ] Performance tested (Lighthouse, load testing)
-- [ ] Security audit completed
-- [ ] User acceptance testing done
-- [ ] Team trained on deployment procedures
-- [ ] Rollback plan documented
-- [ ] On-call support team assigned
-
----
-
-**Last Updated:** 2026-08-05  
-**Status:** Deployment ready ✅
+Do not mark BizHR as fully production-ready until Section 10 is finalized and the remaining client/operations checks are completed.
