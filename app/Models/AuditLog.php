@@ -34,10 +34,13 @@ class AuditLog extends Model
      */
     public static function record(Model $record, string $action, array $oldValues, array $newValues): self
     {
+        /** @var User|null $user */
+        $user = auth()->user();
         $eventUuid = (string) Str::uuid();
         $payload = [
             'event_uuid' => $eventUuid,
-            'user_id' => auth()->id(),
+            'user_id' => $user?->id,
+            'company_id' => $user?->companyId(),
             'action' => $action,
             'module' => Str::snake(Str::pluralStudly(class_basename($record))),
             'record_type' => $record::class,
@@ -60,5 +63,11 @@ class AuditLog extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** @return BelongsTo<Company, $this> */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 }
