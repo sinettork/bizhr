@@ -15,8 +15,6 @@ beforeEach(function (): void {
 
     $this->primaryCompany = Company::query()->create(['name' => 'Primary company']);
     $this->otherCompany = Company::query()->create(['name' => 'Other company']);
-    $this->owner = User::factory()->create();
-    $this->owner->assignRole('Owner');
     $this->primaryBranch = Branch::query()->create([
         'company_id' => $this->primaryCompany->id,
         'name' => 'Primary branch',
@@ -41,6 +39,22 @@ beforeEach(function (): void {
         'branch_id' => $this->otherBranch->id,
         'name' => 'Other department',
         'code' => 'OTHER-DEPT',
+        'is_active' => true,
+    ]);
+
+    $this->owner = User::factory()->create();
+    $this->owner->assignRole('Owner');
+    Employee::query()->create([
+        'company_id' => $this->primaryCompany->id,
+        'branch_id' => $this->primaryBranch->id,
+        'department_id' => $this->primaryDepartment->id,
+        'user_id' => $this->owner->id,
+        'employee_code' => 'PRIMARY-OWNER',
+        'first_name' => 'Primary',
+        'last_name' => 'Owner',
+        'hire_date' => today(),
+        'employment_status' => 'Active',
+        'salary_currency' => 'USD',
         'is_active' => true,
     ]);
 });
