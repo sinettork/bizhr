@@ -12,17 +12,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('asset_assignments', function (Blueprint $table) {
-            $table->foreignId('transferred_to_employee_id')->nullable()->constrained('employees')->nullOnDelete()->after('received_by');
-            $table->date('transferred_at')->nullable()->after('transferred_to_employee_id');
-            $table->foreignId('transferred_by')->nullable()->constrained('users')->nullOnDelete()->after('transferred_at');
-            $table->boolean('is_lost')->default(false)->after('transferred_by');
-            $table->date('lost_at')->nullable()->after('is_lost');
-            $table->text('lost_reason')->nullable()->after('lost_at');
-            $table->foreignId('lost_reported_by')->nullable()->constrained('users')->nullOnDelete()->after('lost_reason');
-            $table->boolean('is_retired')->default(false)->after('lost_reported_by');
-            $table->date('retired_at')->nullable()->after('is_retired');
-            $table->text('retirement_reason')->nullable()->after('retired_at');
-            $table->foreignId('retired_by')->nullable()->constrained('users')->nullOnDelete()->after('retirement_reason');
+            $table->foreignId('transferred_to_employee_id')->nullable()->constrained('employees')->nullOnDelete();
+            $table->date('transferred_at')->nullable();
+            $table->foreignId('transferred_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->boolean('is_lost')->default(false);
+            $table->date('lost_at')->nullable();
+            $table->text('lost_reason')->nullable();
+            $table->foreignId('lost_reported_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->boolean('is_retired')->default(false);
+            $table->date('retired_at')->nullable();
+            $table->text('retirement_reason')->nullable();
+            $table->foreignId('retired_by')->nullable()->constrained('users')->nullOnDelete();
         });
     }
 
