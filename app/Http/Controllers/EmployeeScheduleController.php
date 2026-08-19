@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
-use App\Models\Company;
 use App\Models\Employee;
 use App\Models\EmployeeSchedule;
 use App\Models\WorkShift;
@@ -18,8 +17,7 @@ class EmployeeScheduleController extends Controller
 {
     public function index(Request $request): View
     {
-        $companyId = Company::query()->value('id');
-        abort_unless($companyId, 404);
+        $companyId = $this->currentCompanyId($request);
         $workDate = $request->date('date') ?? CarbonImmutable::today();
 
         $schedules = EmployeeSchedule::query()
@@ -43,8 +41,9 @@ class EmployeeScheduleController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $this->validated($request);
-        $employee = $this->employeeForCompany($data['employee_id']);
+        $companyId = $this->currentCompanyId($request);
+        $data = $this->validated($request, $companyId);
+        $employee = $this->employeeForCompany($data['employee_id'], $companyId);
         if (! $employee->branch_id) {
             throw ValidationException::withMessages(['employee_id' => 'Assign the employee to a branch before publishing a schedule.']);
         }
@@ -63,9 +62,10 @@ class EmployeeScheduleController extends Controller
 
     public function update(Request $request, EmployeeSchedule $schedule): RedirectResponse
     {
-        $this->ensureCompany($schedule);
-        $data = $this->validated($request, $schedule);
-        $employee = $this->employeeForCompany($data['employee_id']);
+        $companyId = $this->currentCompanyId($request);
+        $this->ensureCompany($schedule, $companyId);
+        $data = $this->validated($request, $companyId, $schedule);
+        $employee = $this->employeeForCompany($data['employee_id'], $companyId);
         if (! $employee->branch_id) {
             throw ValidationException::withMessages(['employee_id' => 'Assign the employee to a branch before publishing a schedule.']);
         }
@@ -78,18 +78,17 @@ class EmployeeScheduleController extends Controller
         return back()->with('status', 'Employee schedule updated.');
     }
 
-    public function destroy(EmployeeSchedule $schedule): RedirectResponse
+    public function destroy(Request $request, EmployeeSchedule $schedule): RedirectResponse
     {
-        $this->ensureCompany($schedule);
+        $this->ensureCompany($schedule, $this->currentCompanyId($request));
         $schedule->delete();
 
         return back()->with('status', 'Employee schedule deleted.');
     }
 
     /** @return array<string, mixed> */
-    private function validated(Request $request, ?EmployeeSchedule $schedule = null): array
+    private function validated(Request $request, int $companyId, ?EmployeeSchedule $schedule = null): array
     {
-        $companyId = (int) Company::query()->value('id');
         $data = $request->validate([
             'employee_id' => ['required', Rule::exists('employees', 'id')->where('company_id', $companyId)],
             'work_date' => ['required', 'date', 'after_or_equal:2000-01-01', 'before_or_equal:2100-12-31', Rule::unique('employee_schedules')->where('employee_id', $request->integer('employee_id'))->ignore($schedule)],
@@ -106,13 +105,16 @@ class EmployeeScheduleController extends Controller
         return [...$data, 'is_rest_day' => $isRestDay, 'work_shift_id' => $isRestDay ? null : $data['work_shift_id']];
     }
 
-    private function employeeForCompany(int $employeeId): Employee
+    private function employeeForCompany(int $employeeId, int $companyId): Employee
     {
-        return Employee::query()->where('company_id', Company::query()->value('id'))->findOrFail($employeeId);
+        return Employee::query()->where('company_id', $companyId)->findOrFail($employeeId);
     }
 
-    private function ensureCompany(EmployeeSchedule $schedule): void
+    private function ensureCompany(EmployeeSchedule $schedule, int $companyId): void
     {
-        abort_unless($schedule->employee()->where('company_id', Company::query()->value('id'))->exists(), 404);
+        abort_unless($schedule->employee()->where('company_id', $companyId)->exists(), 404);
+        if ($schedule->work_shift_id !== null) {
+            abort_unless($schedule->workShift()->where('company_id', $companyId)->exists(), 404);
+        }
     }
 }
