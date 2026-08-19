@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\Employee;
 use App\Models\PayrollPeriod;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,9 +23,12 @@ class StandardPageController extends Controller
         $module = $modules[$page];
         $model = $module['model'];
         $query = $model::query();
+        $companyId = $request->user()->companyId();
+        abort_unless($companyId !== null, 403, 'Your account is not linked to a company context.');
+        $hasCompanyColumn = Schema::hasColumn($query->getModel()->getTable(), 'company_id');
 
-        if (Schema::hasColumn($query->getModel()->getTable(), 'company_id')) {
-            $query->where('company_id', Company::query()->value('id') ?: 0);
+        if ($hasCompanyColumn) {
+            $query->where('company_id', $companyId);
         }
 
         if (($module['mine'] ?? false) === true) {
@@ -51,8 +53,12 @@ class StandardPageController extends Controller
         }
 
         $records = $query->latest('id')->paginate($this->perPage($request, 20))->withQueryString();
+        $statusQuery = $model::query();
+        if ($hasCompanyColumn) {
+            $statusQuery->where('company_id', $companyId);
+        }
         $statusOptions = ! empty($module['has_status'])
-            ? $model::query()->whereNotNull($module['status_column'] ?? 'status')->distinct()->orderBy($module['status_column'] ?? 'status')->pluck($module['status_column'] ?? 'status')->filter()->values()
+            ? $statusQuery->whereNotNull($module['status_column'] ?? 'status')->distinct()->orderBy($module['status_column'] ?? 'status')->pluck($module['status_column'] ?? 'status')->filter()->values()
             : collect();
         $workspaceMode = match (true) {
             str_starts_with($page, 'my-') || in_array($page, ['my-payroll', 'my-training', 'my-assets', 'my-expenses'], true) => 'personal',
