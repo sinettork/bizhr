@@ -100,6 +100,22 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
             return (int) $employee->company_id;
         }
 
+        if ($this->exists && $this->hasRole('Owner')) {
+            $companyIds = EmploymentContract::query()
+                ->where(function ($query): void {
+                    $query->where('approved_by', $this->id)
+                        ->orWhere('submitted_by', $this->id);
+                })
+                ->distinct()
+                ->orderBy('company_id')
+                ->limit(2)
+                ->pluck('company_id');
+
+            if ($companyIds->count() === 1) {
+                return (int) $companyIds->first();
+            }
+        }
+
         // Preserve bootstrap access for an unlinked Super Admin only in a
         // single-company installation. Never silently select the first tenant
         // when multiple companies exist.
