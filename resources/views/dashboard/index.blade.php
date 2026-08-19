@@ -22,6 +22,13 @@
         $myAttendance?->check_in_at => 'Checked in at '.$myAttendance->check_in_at->format('H:i'),
         default => 'No published shift for today.',
     };
+
+    $shiftSummary = match(true) {
+        ! $employee => 'Not linked',
+        $mySchedule?->is_rest_day => 'Rest day',
+        $mySchedule?->workShift => $mySchedule->workShift->getTimeRangeFormatted(),
+        default => 'Not scheduled',
+    };
 @endphp
 
 <x-layouts::app title="Dashboard">
@@ -89,9 +96,9 @@
                 </div>
                 <div class="col-6 col-lg-3">
                     <section class="profile-card h-100 mb-0"><div class="profile-card-body">
-                        <div class="small text-body-secondary">Exports</div>
-                        <div class="fs-4 fw-bold text-dark mt-1">{{ number_format($metrics['pendingExports']) }}</div>
-                        <div class="small text-body-secondary mt-2">Running now</div>
+                        <div class="small text-body-secondary">Today's shift</div>
+                        <div class="fs-6 fw-bold text-dark mt-1">{{ $shiftSummary }}</div>
+                        <div class="small text-body-secondary mt-2">Published schedule</div>
                     </div></section>
                 </div>
                 <div class="col-6 col-lg-3">
