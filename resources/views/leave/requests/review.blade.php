@@ -88,6 +88,37 @@
         @endif
     </div>
 
+    @if($approvedRequests->isNotEmpty())
+        <section class="profile-card mt-4">
+            <div class="profile-card-header">
+                <div>
+                    <h2 class="profile-card-title"><i class="fa-solid fa-calendar-check text-success"></i><span>Upcoming approved leave</span></h2>
+                    <div class="small text-body-secondary mt-1">HR can reverse future approved leave before it starts. Balance restoration is automatic and audited.</div>
+                </div>
+            </div>
+            <div class="profile-card-body p-0">
+                <div class="list-group list-group-flush">
+                    @foreach($approvedRequests as $leaveRequest)
+                        @php($empName = $leaveRequest->employee?->full_name_km ?: $leaveRequest->employee?->full_name_en ?: $leaveRequest->employee?->employee_code)
+                        <div class="list-group-item px-3 py-3">
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                <div>
+                                    <div class="fw-semibold text-dark">{{ $empName }} <span class="status-text text-bg-success ms-1">Approved</span></div>
+                                    <div class="small text-body-secondary mt-1">
+                                        {{ $leaveRequest->leaveType?->name }} · {{ $leaveRequest->start_date->format('d M Y') }} – {{ $leaveRequest->end_date->format('d M Y') }} · {{ number_format($leaveRequest->total_days ?? 0, 1) }} days
+                                    </div>
+                                </div>
+                                <button class="btn btn-outline-danger btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#cancelApprovedLeave{{ $leaveRequest->id }}">
+                                    <i class="fa-solid fa-ban me-1"></i>Cancel approved leave
+                                </button>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </section>
+    @endif
+
     @foreach($requests as $leaveRequest)
         <div class="modal fade" id="rejectModal{{ $leaveRequest->id }}" tabindex="-1">
             <div class="modal-dialog">
@@ -105,6 +136,29 @@
                     <div class="modal-footer">
                         <button class="btn btn-light" type="button" data-bs-dismiss="modal">Cancel</button>
                         <button class="btn btn-danger" type="submit"><i class="fa-solid fa-xmark me-1"></i>Confirm rejection</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endforeach
+
+    @foreach($approvedRequests as $leaveRequest)
+        <div class="modal fade" id="cancelApprovedLeave{{ $leaveRequest->id }}" tabindex="-1">
+            <div class="modal-dialog">
+                <form class="modal-content" method="POST" action="{{ route('leave.requests.reject', $leaveRequest) }}">
+                    @csrf
+                    <div class="modal-header">
+                        <h2 class="modal-title fs-5"><i class="fa-solid fa-triangle-exclamation text-danger me-2"></i>Cancel Approved Leave</h2>
+                        <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-warning small">This reverses the approval and restores the employee leave balance. It is blocked once leave starts or when an overlapping payroll period is locked.</div>
+                        <label class="form-label">Cancellation reason <span class="text-danger">*</span></label>
+                        <textarea class="form-control" name="note" required minlength="5" maxlength="1000" rows="3" placeholder="Explain why the approved leave is being cancelled..."></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-light" type="button" data-bs-dismiss="modal">Keep approved leave</button>
+                        <button class="btn btn-danger" type="submit"><i class="fa-solid fa-ban me-1"></i>Cancel leave & restore balance</button>
                     </div>
                 </form>
             </div>
