@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\JobApplicant;
 use App\Models\JobInterview;
 use App\Models\JobOffer;
+use App\Models\JobVacancy;
 use App\Models\User;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -45,6 +46,7 @@ class RecruitmentWorkflowService
     {
         return DB::transaction(function () use ($offer, $actor) {
             $offer = JobOffer::query()->lockForUpdate()->findOrFail($offer->id);
+            $this->assertOfferCompany($offer, $actor);
             if ($offer->status !== 'draft') {
                 throw new DomainException('Only a draft offer can be approved.');
             }
@@ -62,12 +64,28 @@ class RecruitmentWorkflowService
 
     public function respondToOffer(JobOffer $offer, bool $accepted): JobOffer
     {
-        if (! in_array($offer->status, ['approved', 'sent'], true) || $offer->expires_at->isPast()) {
-            throw new DomainException('This offer is unavailable or expired.');
-        }
-        $offer->update(['status' => $accepted ? 'accepted' : 'declined', 'responded_at' => now()]);
-        $offer->applicant->update(['status' => $accepted ? 'accepted' : 'declined']);
+        return DB::transaction(function () use ($offer, $accepted) {
+            $offer = JobOffer::query()->lockForUpdate()->findOrFail($offer->id);
+            if (! in_array($offer->status, ['approved', 'sent'], true) || $offer->expires_at->isPast()) {
+                throw new DomainException('This offer is unavailable or expired.');
+            }
 
-        return $offer->refresh();
+            $applicant = JobApplicant::query()->lockForUpdate()->findOrFail($offer->job_applicant_id);
+            $offer->update(['status' => $accepted ? 'accepted' : 'declined', 'responded_at' => now()]);
+            $applicant->update(['status' => $accepted ? 'accepted' : 'declined']);
+
+            return $offer->refresh();
+        });
+    }
+
+    private function assertOfferCompany(JobOffer $offer, User $actor): void
+    {
+        $companyId = JobVacancy::query()
+            ->whereIn('id', JobApplicant::query()->whereKey($offer->job_applicant_id)->select('job_vacancy_id'))
+            ->value('company_id');
+
+        if ($companyId === null || $actor->companyId() !== (int) $companyId) {
+            throw new DomainException('The job offer does not belong to the actor company.');
+        }
     }
 }
