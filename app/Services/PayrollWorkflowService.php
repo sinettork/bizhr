@@ -107,7 +107,7 @@ class PayrollWorkflowService
                     '/my-payroll',
                     'money-check-dollar',
                     'success',
-                    ['payroll_period_id' => $period->public_id],
+                    ['payroll_period_id' => (string) $period->getRouteKey()],
                     (int) $period->company_id,
                 );
             }
