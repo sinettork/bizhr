@@ -123,7 +123,9 @@ class LeaveRequestController extends Controller
         ])->whereHas('employee', fn (Builder $employeeQuery) => $employeeQuery->where('company_id', $companyId));
 
         $approvedRequests = collect();
+        $reviewStage = 'hr';
         if ($user->hasRole('Manager')) {
+            $reviewStage = 'manager';
             abort_unless($actor !== null, 403);
             $query->where('status', 'pending')
                 ->whereHas('employee', fn (Builder $employeeQuery) => $employeeQuery
@@ -145,7 +147,7 @@ class LeaveRequestController extends Controller
         }
 
         $statisticsQuery = clone $query;
-        $requests = $query->latest('start_date')->latest('id')->paginate($this->perPage($request, 20))->withQueryString();
+        $requests = $query->oldest('created_at')->oldest('id')->paginate($this->perPage($request, 20))->withQueryString();
 
         $companyRequests = LeaveRequest::query()->whereHas('employee', fn (Builder $employees) => $employees->where('company_id', $companyId));
         $statistics = [
@@ -156,7 +158,7 @@ class LeaveRequestController extends Controller
             })->count(),
         ];
 
-        return view('leave.requests.review', compact('requests', 'approvedRequests', 'statistics'));
+        return view('leave.requests.review', compact('requests', 'approvedRequests', 'statistics', 'reviewStage'));
     }
 
     public function approve(
