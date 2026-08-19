@@ -94,15 +94,18 @@ class PerformanceController extends Controller
 
     public function myGoals(Request $request): View
     {
-        $employee = $request->user()->employee;
+        $companyId = $this->currentCompanyId($request);
+        $employee = Employee::query()->where('user_id', $request->user()->id)->where('company_id', $companyId)->first();
         abort_unless($employee !== null, 403);
 
-        return view('performance.my-goals', ['goals' => EmployeeGoal::query()->where('employee_id', $employee->id)->where('company_id', $employee->company_id)->latest('due_date')->paginate($this->perPage($request, 20))->withQueryString()]);
+        return view('performance.my-goals', ['goals' => EmployeeGoal::query()->where('employee_id', $employee->id)->where('company_id', $companyId)->latest('due_date')->paginate($this->perPage($request, 20))->withQueryString()]);
     }
 
     public function updateGoal(Request $request, EmployeeGoal $goal): RedirectResponse
     {
-        abort_unless($goal->employee_id === $request->user()->employee?->id && $goal->company_id === $request->user()->employee?->company_id, 403);
+        $companyId = $this->currentCompanyId($request);
+        $employee = Employee::query()->where('user_id', $request->user()->id)->where('company_id', $companyId)->first();
+        abort_unless($employee !== null && (int) $goal->employee_id === (int) $employee->id && (int) $goal->company_id === $companyId, 403);
         $data = $request->validate(['employee_reported_value' => ['required', 'numeric'], 'employee_note' => ['required', 'string', 'min:3', 'max:2000']]);
         abort_unless(in_array($goal->status, ['active', 'returned'], true), 422);
         $goal->update([...$data, 'status' => 'submitted', 'submitted_at' => now()]);
@@ -159,16 +162,18 @@ class PerformanceController extends Controller
 
     public function myReviews(Request $request): View
     {
-        $employee = $request->user()->employee;
+        $companyId = $this->currentCompanyId($request);
+        $employee = Employee::query()->where('user_id', $request->user()->id)->where('company_id', $companyId)->first();
         abort_unless($employee !== null, 403);
 
-        return view('performance.my-reviews', ['reviews' => PerformanceReview::query()->with('scores')->where('employee_id', $employee->id)->where('company_id', $employee->company_id)->latest('period_end')->paginate($this->perPage($request, 20))->withQueryString()]);
+        return view('performance.my-reviews', ['reviews' => PerformanceReview::query()->with('scores')->where('employee_id', $employee->id)->where('company_id', $companyId)->latest('period_end')->paginate($this->perPage($request, 20))->withQueryString()]);
     }
 
     public function acknowledge(Request $request, PerformanceReview $review, PerformanceReviewService $service): RedirectResponse
     {
-        $employee = $request->user()->employee;
-        abort_unless($employee !== null && $review->company_id === $employee->company_id, 404);
+        $companyId = $this->currentCompanyId($request);
+        $employee = Employee::query()->where('user_id', $request->user()->id)->where('company_id', $companyId)->first();
+        abort_unless($employee !== null && (int) $review->company_id === $companyId, 404);
         $data = $request->validate(['comment' => ['nullable', 'string', 'max:2000']]);
         $this->runWorkflow(fn () => $service->acknowledge($review, $request->user(), $data['comment'] ?? null));
 
