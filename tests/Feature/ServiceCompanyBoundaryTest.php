@@ -11,7 +11,6 @@ use App\Services\AssetWorkflowService;
 use App\Services\EmploymentContractService;
 use App\Services\PayrollCalculatorService;
 use App\Services\TaskWorkflowService;
-use DomainException;
 use Illuminate\Validation\ValidationException;
 
 function companyUser(Company $company): User
