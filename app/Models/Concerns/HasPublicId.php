@@ -20,18 +20,4 @@ trait HasPublicId
     {
         return 'public_id';
     }
-
-    public function resolveRouteBindingQuery(
-        mixed $query,
-        mixed $value,
-        mixed $field = null,
-    ): mixed {
-        $routeField = is_string($field) ? $field : $this->getRouteKeyName();
-
-        if ($routeField === 'public_id' && ctype_digit((string) $value)) {
-            $routeField = $this->getKeyName();
-        }
-
-        return parent::resolveRouteBindingQuery($query, $value, $routeField);
-    }
 }
