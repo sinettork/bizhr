@@ -13,6 +13,7 @@ class EmploymentContractService
 {
     public function submit(EmploymentContract $contract, User $actor): EmploymentContract
     {
+        $this->assertSameCompany($contract, $actor);
         if (! in_array($contract->status, ['draft', 'rejected'], true)) {
             throw ValidationException::withMessages(['contract' => 'Only draft or rejected contracts can be submitted.']);
         }
@@ -31,6 +32,7 @@ class EmploymentContractService
     {
         return DB::transaction(function () use ($contract, $actor) {
             $contract = EmploymentContract::query()->lockForUpdate()->findOrFail($contract->id);
+            $this->assertSameCompany($contract, $actor);
 
             if ($contract->status !== 'pending_approval') {
                 throw ValidationException::withMessages(['contract' => 'Only pending contracts can be approved.']);
@@ -42,6 +44,7 @@ class EmploymentContractService
             $this->validateLegalDates($contract);
 
             $hasActive = EmploymentContract::query()
+                ->where('company_id', $contract->company_id)
                 ->where('employee_id', $contract->employee_id)
                 ->whereIn('status', ['active', 'expiring'])
                 ->whereKeyNot($contract->id)
@@ -54,6 +57,8 @@ class EmploymentContractService
             if ($contract->previous_contract_id) {
                 EmploymentContract::query()
                     ->whereKey($contract->previous_contract_id)
+                    ->where('company_id', $contract->company_id)
+                    ->where('employee_id', $contract->employee_id)
                     ->whereIn('status', ['active', 'expiring'])
                     ->update(['status' => 'superseded']);
             }
@@ -75,6 +80,7 @@ class EmploymentContractService
         string $date,
         string $reason,
     ): EmploymentContract {
+        $this->assertSameCompany($contract, $actor);
         if (! in_array($contract->status, ['active', 'expiring'], true)) {
             throw ValidationException::withMessages(['contract' => 'Only an active contract can be terminated.']);
         }
@@ -116,10 +122,17 @@ class EmploymentContractService
 
             $root = $this->rootContract($contract);
             if ($root->id !== $contract->id) {
-                $rootStart = CarbonImmutable::parse($root->start_date);
                 $rootEnd = CarbonImmutable::parse($root->end_date);
                 $maximumEnd = $rootEnd->addYears(2);
-                $expectedStart = CarbonImmutable::parse($contract->previousContract?->end_date)->addDay();
+                $previousEndDate = EmploymentContract::query()
+                    ->whereKey($contract->previous_contract_id)
+                    ->where('company_id', $contract->company_id)
+                    ->where('employee_id', $contract->employee_id)
+                    ->value('end_date');
+                if ($previousEndDate === null) {
+                    throw ValidationException::withMessages(['previous_contract_id' => 'The previous contract is invalid.']);
+                }
+                $expectedStart = CarbonImmutable::parse($previousEndDate)->addDay();
                 if ($end->gt($maximumEnd) || ! $start->equalTo($expectedStart)) {
                     throw ValidationException::withMessages(['end_date' => 'Renewal must be continuous and the full FDC chain cannot exceed the legal renewal limit.']);
                 }
@@ -182,7 +195,11 @@ class EmploymentContractService
                 throw ValidationException::withMessages(['previous_contract_id' => 'Contract renewal chain is invalid.']);
             }
             $seen[$contract->id] = true;
-            $contract = $contract->previousContract()->firstOrFail();
+            $contract = EmploymentContract::query()
+                ->whereKey($contract->previous_contract_id)
+                ->where('company_id', $contract->company_id)
+                ->where('employee_id', $contract->employee_id)
+                ->firstOrFail();
         }
 
         return $contract;
@@ -205,5 +222,12 @@ class EmploymentContractService
             $contract->start_date->toDateString(), $contract->end_date?->toDateString(),
             $contract->salary_amount, $contract->salary_currency,
         ]));
+    }
+
+    private function assertSameCompany(EmploymentContract $contract, User $actor): void
+    {
+        if ($actor->companyId() !== (int) $contract->company_id) {
+            throw ValidationException::withMessages(['contract' => 'The contract does not belong to the actor company.']);
+        }
     }
 }
