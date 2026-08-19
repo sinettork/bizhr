@@ -14,6 +14,14 @@ abstract class Controller
         return in_array($value, [10, 20, 30, 50, 100], true) ? $value : $default;
     }
 
+    protected function currentCompanyId(Request $request): int
+    {
+        $companyId = $request->user()?->companyId();
+        abort_unless($companyId !== null, 403, 'Your account is not linked to a company context.');
+
+        return $companyId;
+    }
+
     /**
      * @param  array<string>  $sourceFields
      */
