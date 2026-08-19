@@ -32,20 +32,42 @@ class TaskController extends Controller
 
     public function mine(Request $request): View
     {
-        $employee = $request->user()->employee;
-        abort_unless($employee !== null, 403);
         $companyId = $this->currentCompanyId($request);
-        abort_unless($employee->company_id === $companyId, 403);
+        $employee = Employee::query()
+            ->where('company_id', $companyId)
+            ->where('user_id', $request->user()->id)
+            ->first();
+        abort_unless($employee !== null, 403);
 
-        return view('tasks.mine', [
-            'tasks' => Task::query()
-                ->with('assigner')
-                ->where('company_id', $companyId)
-                ->where('assigned_to', $employee->id)
-                ->latest('due_date')
-                ->paginate($this->perPage($request, 20))
-                ->withQueryString(),
-        ]);
+        $baseQuery = Task::query()
+            ->where('company_id', $companyId)
+            ->where('assigned_to', $employee->id);
+
+        $status = $request->string('status')->trim()->value();
+        $tasks = (clone $baseQuery)
+            ->with('assigner')
+            ->when($status === 'open', fn ($query) => $query->whereNotIn('status', ['verified', 'cancelled']))
+            ->when($status === 'overdue', fn ($query) => $query
+                ->whereNotIn('status', ['completed', 'verified', 'cancelled'])
+                ->whereDate('due_date', '<', today()))
+            ->when($status === 'waiting_verification', fn ($query) => $query->where('status', 'waiting_verification'))
+            ->when($status === 'completed', fn ($query) => $query->whereIn('status', ['completed', 'verified']))
+            ->orderByRaw("case when status in ('verified', 'cancelled') then 1 else 0 end")
+            ->orderBy('due_date')
+            ->paginate($this->perPage($request, 20))
+            ->withQueryString();
+
+        $statistics = [
+            'open' => (clone $baseQuery)->whereNotIn('status', ['verified', 'cancelled'])->count(),
+            'overdue' => (clone $baseQuery)
+                ->whereNotIn('status', ['completed', 'verified', 'cancelled'])
+                ->whereDate('due_date', '<', today())
+                ->count(),
+            'waiting' => (clone $baseQuery)->where('status', 'waiting_verification')->count(),
+            'completed' => (clone $baseQuery)->whereIn('status', ['completed', 'verified'])->count(),
+        ];
+
+        return view('tasks.mine', compact('tasks', 'statistics', 'status'));
     }
 
     public function store(Request $request): RedirectResponse
