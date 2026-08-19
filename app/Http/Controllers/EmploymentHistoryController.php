@@ -10,6 +10,7 @@ use App\Models\Position;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class EmploymentHistoryController extends Controller
@@ -34,24 +35,19 @@ class EmploymentHistoryController extends Controller
     public function store(Request $request, Employee $employee): RedirectResponse
     {
         $this->authorizeEmployee($employee, true);
+        $companyId = (int) $employee->company_id;
 
         $data = $request->validate([
             'event_type' => ['required', 'in:Hired,Transfer,Promotion,Position change,Salary adjustment,Contract renewal,Status change,Other'],
             'effective_date' => ['required', 'date'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
-            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
-            'position_id' => ['nullable', 'integer', 'exists:positions,id'],
+            'branch_id' => ['nullable', Rule::exists('branches', 'id')->where('company_id', $companyId)],
+            'department_id' => ['nullable', Rule::exists('departments', 'id')->where('company_id', $companyId)],
+            'position_id' => ['nullable', Rule::exists('positions', 'id')->where('company_id', $companyId)],
             'employment_type' => ['nullable', 'string', 'max:255'],
             'base_salary' => ['nullable', 'numeric', 'min:0'],
             'salary_currency' => ['nullable', 'in:USD,KHR'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
-
-        foreach (['branch_id' => Branch::class, 'department_id' => Department::class, 'position_id' => Position::class] as $field => $model) {
-            if (! empty($data[$field])) {
-                abort_unless($model::whereKey($data[$field])->where('company_id', $employee->company_id)->exists(), 422);
-            }
-        }
 
         $employee->employmentHistories()->create([...$data, 'recorded_by' => auth()->id()]);
 
@@ -73,13 +69,10 @@ class EmploymentHistoryController extends Controller
         /** @var User|null $user */
         $user = auth()->user();
         abort_unless($user !== null, 403);
+        abort_unless($user->companyId() === (int) $employee->company_id, 404);
 
-        $actor = $user->employee;
-        $isOwnRecord = $actor?->id === $employee->id;
-
-        if ($actor && $actor->company_id !== $employee->company_id) {
-            abort(403);
-        }
+        $actorId = Employee::query()->where('user_id', $user->id)->value('id');
+        $isOwnRecord = $actorId !== null && (int) $actorId === (int) $employee->id;
 
         if ($isOwnRecord && ! $editing) {
             abort_unless($user->can('employee.view-own'), 403);
