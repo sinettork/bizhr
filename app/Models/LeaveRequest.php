@@ -19,11 +19,22 @@ class LeaveRequest extends Model
     /** @use HasFactory<LeaveRequestFactory> */
     use HasFactory, HasPublicId, SoftDeletes;
 
-    protected $fillable = ['employee_id', 'leave_type_id', 'start_date', 'end_date', 'total_days', 'reason', 'attachment', 'status', 'manager_id', 'manager_reviewed_at', 'manager_note', 'hr_id', 'hr_reviewed_at', 'hr_note'];
+    protected $fillable = [
+        'employee_id', 'leave_type_id', 'start_date', 'end_date', 'total_days', 'reason', 'attachment', 'status',
+        'manager_id', 'manager_reviewed_at', 'manager_note', 'hr_id', 'hr_reviewed_at', 'hr_note',
+        'cancelled_by', 'cancelled_at', 'cancellation_reason',
+    ];
 
     protected function casts(): array
     {
-        return ['start_date' => 'date', 'end_date' => 'date', 'total_days' => 'decimal:2', 'manager_reviewed_at' => 'datetime', 'hr_reviewed_at' => 'datetime'];
+        return [
+            'start_date' => 'date',
+            'end_date' => 'date',
+            'total_days' => 'decimal:2',
+            'manager_reviewed_at' => 'datetime',
+            'hr_reviewed_at' => 'datetime',
+            'cancelled_at' => 'datetime',
+        ];
     }
 
     /** @return BelongsTo<Employee, $this> */
@@ -48,5 +59,11 @@ class LeaveRequest extends Model
     public function hr(): BelongsTo
     {
         return $this->belongsTo(User::class, 'hr_id');
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 }
