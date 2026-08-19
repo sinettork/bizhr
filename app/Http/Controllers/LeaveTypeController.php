@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\LeaveType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,8 +13,7 @@ class LeaveTypeController extends Controller
 {
     public function index(Request $request): View
     {
-        $companyId = Company::query()->value('id');
-        abort_unless($companyId, 404);
+        $companyId = $this->currentCompanyId($request);
 
         $types = LeaveType::query()
             ->where('company_id', $companyId)
@@ -34,9 +32,9 @@ class LeaveTypeController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $company = Company::query()->firstOrFail();
-        $this->prepareGeneratedCode($request, 'code', 'leave_types', 'code', 'LEAVE', ['name'], 'company_id', $company->id);
-        LeaveType::query()->create($this->validated($request, $company->id) + ['company_id' => $company->id]);
+        $companyId = $this->currentCompanyId($request);
+        $this->prepareGeneratedCode($request, 'code', 'leave_types', 'code', 'LEAVE', ['name'], 'company_id', $companyId);
+        LeaveType::query()->create($this->validated($request, $companyId) + ['company_id' => $companyId]);
 
         $response = back()->with('status', 'Leave type created.');
 
@@ -47,16 +45,16 @@ class LeaveTypeController extends Controller
 
     public function update(Request $request, LeaveType $leaveType): RedirectResponse
     {
-        $this->ensureCompany($leaveType);
+        $this->ensureCompany($leaveType, $request);
         $this->prepareGeneratedCode($request, 'code', 'leave_types', 'code', 'LEAVE', ['name'], 'company_id', $leaveType->company_id, $leaveType->id);
         $leaveType->update($this->validated($request, $leaveType->company_id, $leaveType));
 
         return back()->with('status', 'Leave type updated.');
     }
 
-    public function destroy(LeaveType $leaveType): RedirectResponse
+    public function destroy(Request $request, LeaveType $leaveType): RedirectResponse
     {
-        $this->ensureCompany($leaveType);
+        $this->ensureCompany($leaveType, $request);
 
         if ($leaveType->requests()->exists() || $leaveType->balances()->exists()) {
             return back()->withErrors(['leave_type' => 'This leave type already has requests or balances. Set it inactive instead of deleting it.']);
@@ -101,8 +99,8 @@ class LeaveTypeController extends Controller
         ];
     }
 
-    private function ensureCompany(LeaveType $leaveType): void
+    private function ensureCompany(LeaveType $leaveType, Request $request): void
     {
-        abort_unless((int) $leaveType->company_id === (int) Company::query()->value('id'), 404);
+        abort_unless((int) $leaveType->company_id === $this->currentCompanyId($request), 404);
     }
 }
