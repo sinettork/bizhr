@@ -5,6 +5,7 @@ use App\Models\Company;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
+use App\Models\EmploymentContract;
 use App\Models\ExpenseClaim;
 use App\Models\JobApplicant;
 use App\Models\JobVacancy;
@@ -45,6 +46,28 @@ it('denies cross-company candidate CV access', function () {
     Storage::disk('local')->put($applicant->cv_path, 'private CV');
 
     $this->actingAs($this->owner)->get(route('recruitment.applicants.cv', $applicant))->assertNotFound();
+});
+
+it('denies cross-company employment contract document access', function () {
+    $employee = Employee::query()->create(['company_id' => $this->otherCompany->id, 'branch_id' => $this->otherBranch->id, 'department_id' => $this->otherDepartment->id, 'employee_code' => 'PRIVATE-CONTRACT', 'first_name' => 'Private', 'last_name' => 'Contract', 'hire_date' => today(), 'employment_status' => 'Active', 'salary_currency' => 'USD', 'is_active' => true]);
+    $contract = EmploymentContract::query()->create([
+        'company_id' => $this->otherCompany->id,
+        'employee_id' => $employee->id,
+        'contract_number' => 'PRIVATE-CONTRACT-001',
+        'type' => 'udc',
+        'status' => 'active',
+        'start_date' => today(),
+        'salary_amount' => 500,
+        'salary_currency' => 'USD',
+        'pay_type' => 'monthly',
+        'work_hours_per_day' => 8,
+        'work_days_per_week' => 6,
+        'document_path' => 'private/other/contract.pdf',
+        'original_name' => 'contract.pdf',
+    ]);
+    Storage::disk('local')->put($contract->document_path, 'private contract');
+
+    $this->actingAs($this->owner)->get(route('contracts.download', $contract))->assertNotFound();
 });
 
 it('requires authentication for private image endpoints', function () {
