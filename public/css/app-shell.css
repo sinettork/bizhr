@@ -301,6 +301,81 @@ html {
     .app-workspace { margin-left: 0; }
 }
 
+@media (max-width: 575.98px) {
+    :root {
+        --app-shell-topbar-height: 56px;
+    }
+
+    .app-topbar .container-fluid {
+        padding-inline: .75rem !important;
+    }
+
+    .app-topbar .navbar-brand {
+        font-size: .84rem;
+    }
+
+    .app-sidebar-toggle,
+    .app-topbar-action,
+    .app-user-menu {
+        min-width: 44px;
+        min-height: 44px;
+        justify-content: center;
+    }
+
+    .app-sidebar {
+        --bs-offcanvas-width: min(92vw, 320px);
+    }
+
+    .app-sidebar-link,
+    .app-sidebar-group-toggle,
+    .app-sidebar-sublink {
+        min-height: 44px;
+    }
+
+    .app-sidebar-nav {
+        padding: .65rem .55rem 1rem;
+    }
+
+    .app-sidebar-submenu {
+        margin-left: .9rem;
+    }
+
+    .app-workspace {
+        padding-left: .75rem !important;
+        padding-right: .75rem !important;
+        padding-top: .75rem !important;
+    }
+
+    .profile-nav-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .profile-nav-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    .profile-nav-tabs .nav-item {
+        flex: 0 0 auto;
+    }
+
+    .profile-nav-tab {
+        min-height: 44px;
+        white-space: nowrap;
+    }
+
+    .reference-list .table-responsive {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .modal-dialog {
+        margin: .75rem;
+    }
+}
+
 @media print {
     .app-body { padding-top: 0; }
     .app-sidebar,
