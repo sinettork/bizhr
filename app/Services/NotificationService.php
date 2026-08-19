@@ -40,8 +40,8 @@ class NotificationService
     }
 
     /**
-     * @param list<int> $userIds
-     * @param array<string, mixed>|null $metadata
+     * @param  list<int>  $userIds
+     * @param  array<string, mixed>|null  $metadata
      */
     public function notifyMany(
         array $userIds,
@@ -72,11 +72,11 @@ class NotificationService
         ?array $metadata = null,
         ?DateTimeInterface $expiresAt = null,
     ): void {
-        $userIds = User::query()
+        $userIds = array_values(User::query()
             ->whereHas('employee', fn ($query) => $query->where('company_id', $companyId))
             ->pluck('id')
             ->map(fn ($id): int => (int) $id)
-            ->all();
+            ->all());
 
         $this->notifyMany($userIds, $type, $title, $message, $link, $icon, $level, $metadata, $companyId, $expiresAt);
     }
