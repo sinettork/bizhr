@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\GenerateDataExport;
-use App\Models\Company;
 use App\Models\DataExport;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -37,10 +36,8 @@ class DataExportController extends Controller
 
         abort_unless($request->user()->can($permission), 403);
 
-        $companyId = $request->user()->employee->company_id
-            ?? Company::query()->value('id');
-
-        abort_unless($companyId, 422, __('exports.company_required'));
+        $companyId = $request->user()->companyId();
+        abort_unless($companyId !== null, 403, __('exports.company_required'));
 
         $filters = $request->validate(match ($type) {
             'employees' => [
@@ -63,6 +60,7 @@ class DataExportController extends Controller
         $filters = array_filter($filters, fn ($value) => filled($value));
         $existing = DataExport::query()
             ->where('user_id', $request->user()->id)
+            ->where('company_id', $companyId)
             ->where('type', $type)
             ->whereIn('status', ['queued', 'processing'])
             ->where('created_at', '>=', now()->subMinute())
@@ -99,7 +97,10 @@ class DataExportController extends Controller
 
     public function download(Request $request, DataExport $dataExport): StreamedResponse
     {
+        $companyId = $request->user()->companyId();
+        abort_unless($companyId !== null, 403);
         abort_unless($dataExport->user_id === $request->user()->id, 403);
+        abort_unless($dataExport->company_id === $companyId, 404);
         abort_unless($dataExport->status === 'completed', 409);
         abort_if($dataExport->expires_at?->isPast(), 410, __('exports.expired'));
         abort_unless($dataExport->file_path && Storage::disk($dataExport->disk)->exists($dataExport->file_path), 404);
