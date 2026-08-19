@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Attendance;
 use App\Models\Branch;
 use App\Models\Employee;
+use App\Models\EmployeeSchedule;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -41,11 +42,7 @@ class AttendanceQrService
                 $ipAddress,
                 $userAgent,
             ): array {
-                $attendance = Attendance::query()
-                    ->where('employee_id', $employee->getKey())
-                    ->whereDate('work_date', today())
-                    ->lockForUpdate()
-                    ->first();
+                $attendance = $this->attendanceForScan($employee, $branch);
 
                 if (! $attendance) {
                     return $this->checkIn(
@@ -61,7 +58,7 @@ class AttendanceQrService
 
                 if ($attendance->check_out_at) {
                     throw ValidationException::withMessages([
-                        'qrPayload' => 'អ្នកបានចុះម៉ោងចូល និងចេញរួចហើយសម្រាប់ថ្ងៃនេះ។',
+                        'qrPayload' => 'អ្នកបានចុះម៉ោងចូល និងចេញរួចហើយសម្រាប់ថ្ងៃធ្វើការនេះ។',
                     ]);
                 }
 
@@ -197,6 +194,41 @@ class AttendanceQrService
         }
 
         return $distance;
+    }
+
+    private function attendanceForScan(Employee $employee, Branch $branch): ?Attendance
+    {
+        $todayAttendance = Attendance::query()
+            ->where('employee_id', $employee->getKey())
+            ->whereDate('work_date', today())
+            ->lockForUpdate()
+            ->first();
+
+        if ($todayAttendance !== null) {
+            return $todayAttendance;
+        }
+
+        $previousWorkDate = today()->subDay();
+        $hasOvernightSchedule = EmployeeSchedule::query()
+            ->where('employee_id', $employee->getKey())
+            ->where('branch_id', $branch->getKey())
+            ->whereDate('work_date', $previousWorkDate)
+            ->where('is_rest_day', false)
+            ->whereHas('workShift', fn ($query) => $query->where('is_night_shift', true))
+            ->exists();
+
+        if (! $hasOvernightSchedule) {
+            return null;
+        }
+
+        return Attendance::query()
+            ->where('employee_id', $employee->getKey())
+            ->where('branch_id', $branch->getKey())
+            ->whereDate('work_date', $previousWorkDate)
+            ->whereNotNull('check_in_at')
+            ->whereNull('check_out_at')
+            ->lockForUpdate()
+            ->first();
     }
 
     /** @return array{action: string, message: string, attendance: Attendance, branch: Branch, distance: int, time: CarbonInterface} */
