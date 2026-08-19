@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\WorkShift;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -15,8 +14,7 @@ class WorkShiftController extends Controller
 {
     public function index(Request $request): View
     {
-        $companyId = Company::query()->value('id');
-        abort_unless($companyId, 404);
+        $companyId = $this->currentCompanyId($request);
 
         $shifts = WorkShift::query()
             ->where('company_id', $companyId)
@@ -35,9 +33,9 @@ class WorkShiftController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $company = Company::query()->firstOrFail();
-        $this->prepareGeneratedCode($request, 'code', 'work_shifts', 'code', 'SHIFT', ['name'], 'company_id', $company->id);
-        WorkShift::query()->create($this->validated($request, $company->id) + ['company_id' => $company->id]);
+        $companyId = $this->currentCompanyId($request);
+        $this->prepareGeneratedCode($request, 'code', 'work_shifts', 'code', 'SHIFT', ['name'], 'company_id', $companyId);
+        WorkShift::query()->create($this->validated($request, $companyId) + ['company_id' => $companyId]);
 
         $response = back()->with('status', 'Work shift created.');
 
@@ -48,16 +46,16 @@ class WorkShiftController extends Controller
 
     public function update(Request $request, WorkShift $workShift): RedirectResponse
     {
-        $this->ensureCompany($workShift);
+        $this->ensureCompany($request, $workShift);
         $this->prepareGeneratedCode($request, 'code', 'work_shifts', 'code', 'SHIFT', ['name'], 'company_id', $workShift->company_id, $workShift->id);
         $workShift->update($this->validated($request, $workShift->company_id, $workShift));
 
         return back()->with('status', 'Work shift updated.');
     }
 
-    public function destroy(WorkShift $workShift): RedirectResponse
+    public function destroy(Request $request, WorkShift $workShift): RedirectResponse
     {
-        $this->ensureCompany($workShift);
+        $this->ensureCompany($request, $workShift);
 
         if ($workShift->schedules()->exists()) {
             return back()->withErrors(['work_shift' => 'This shift is assigned to employee schedules. Set it inactive instead of deleting it.']);
@@ -105,8 +103,8 @@ class WorkShiftController extends Controller
         ];
     }
 
-    private function ensureCompany(WorkShift $workShift): void
+    private function ensureCompany(Request $request, WorkShift $workShift): void
     {
-        abort_unless((int) $workShift->company_id === (int) Company::query()->value('id'), 404);
+        abort_unless((int) $workShift->company_id === $this->currentCompanyId($request), 404);
     }
 }
