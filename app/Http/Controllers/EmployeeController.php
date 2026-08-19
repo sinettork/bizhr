@@ -21,7 +21,6 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -37,7 +36,7 @@ class EmployeeController extends Controller
             ->with(['branch:id,name', 'department:id,name', 'position:id,title'])
             ->where('company_id', $company->id);
 
-        if (! $request->user()->can('employee.view')) {
+        if (!$request->user()->can('employee.view')) {
             $query->where('user_id', $request->user()->id);
         }
 
@@ -386,7 +385,7 @@ class EmployeeController extends Controller
             }
             $employeeDirectory = $employee?->id ?: 'new';
             $data['profile_photo'] = $request->file('profile_photo')->store("private/companies/{$company->id}/employees/{$employeeDirectory}/profile-photos", $this->profilePhotoDisk());
-        } elseif (! $request->boolean('remove_profile_photo')) {
+        } elseif (!$request->boolean('remove_profile_photo')) {
             unset($data['profile_photo']);
         }
 
@@ -430,7 +429,7 @@ class EmployeeController extends Controller
     private function profilePhotoDisk(): string
     {
         $disk = (string) config('bizhr.documents_disk', 'local');
-        if (! in_array($disk, ['local', 's3'], true)) {
+        if (!in_array($disk, ['local', 's3'], true)) {
             throw new RuntimeException('BizHR profile photos require a private local or S3 disk.');
         }
 
