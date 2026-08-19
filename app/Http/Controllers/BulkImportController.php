@@ -32,7 +32,7 @@ class BulkImportController extends Controller
         $this->currentCompanyId($request);
         $types = $this->availableTypes($request);
         $selectedType = $request->string('type')->toString();
-        abort_if($selectedType && ! array_key_exists($selectedType, $types), 404);
+        abort_if($selectedType && !array_key_exists($selectedType, $types), 404);
 
         return view('imports.index', compact('types', 'selectedType'));
     }
@@ -112,7 +112,7 @@ class BulkImportController extends Controller
                 return back()->withErrors(['file' => 'A file can contain up to '.self::MAX_ROWS.' data rows.']);
             }
             $values = array_values($values);
-            if (! array_filter($values, fn ($v) => filled(trim((string) $v)))) {
+            if (!array_filter($values, fn ($v) => filled(trim((string) $v)))) {
                 continue;
             }
             $raw = array_combine($headers, array_map(fn ($index) => trim((string) ($values[$index] ?? '')), array_keys($headers)));
@@ -121,7 +121,7 @@ class BulkImportController extends Controller
         }
         $reader->close();
 
-        if (! $rows) {
+        if (!$rows) {
             return back()->withErrors(['file' => 'The file has no data rows.']);
         }
 
@@ -143,6 +143,7 @@ class BulkImportController extends Controller
         $definition = $this->definition($type, $request);
         $saved = $request->session()->get("bulk_imports.{$token}");
         $this->assertPreviewContext($request, $type, $saved);
+        /** @var array{rows: list<array{line: int, raw: array<string, string>, data: array<string, mixed>, errors: list<string>}>} $saved */
 
         $rows = collect($saved['rows']);
         $perPage = 50;
@@ -160,7 +161,7 @@ class BulkImportController extends Controller
             'rows' => $paginator->items(),
             'paginator' => $paginator,
             'totalRows' => $rows->count(),
-            'invalidCount' => $rows->filter(fn ($row) => ! empty($row['errors']))->count(),
+            'invalidCount' => $rows->filter(fn ($row) => !empty($row['errors']))->count(),
             'token' => $token,
             'type' => $type,
         ]);
@@ -173,8 +174,9 @@ class BulkImportController extends Controller
         $sessionKey = "bulk_imports.{$data['token']}";
         $saved = $request->session()->get($sessionKey);
         $this->assertPreviewContext($request, $type, $saved);
+        /** @var array{rows: list<array{line: int, raw: array<string, string>, data: array<string, mixed>, errors: list<string>}>} $saved */
 
-        $invalid = collect($saved['rows'])->filter(fn ($row) => ! empty($row['errors']));
+        $invalid = collect($saved['rows'])->filter(fn ($row) => !empty($row['errors']));
         if ($invalid->isNotEmpty()) {
             $request->session()->forget($sessionKey);
 
@@ -247,7 +249,7 @@ class BulkImportController extends Controller
                 $branch = Branch::query()->where('company_id', $this->companyId())->where('code', $row['branch_code'])->first();
                 $data = [...$row, 'branch_id' => $branch?->id, 'is_active' => $bool($row['is_active'])];
                 $errors = $valid($data, ['branch_code' => ['required'], 'code' => ['required', 'max:50'], 'name' => ['required', 'max:180'], 'email' => ['nullable', 'email']]);
-                if (! $branch) {
+                if (!$branch) {
                     $errors[] = 'Branch code does not exist.';
                 }
 
@@ -259,10 +261,10 @@ class BulkImportController extends Controller
                 $department = $branch ? Department::query()->where('company_id', $companyId)->where('branch_id', $branch->id)->where('code', $row['department_code'])->first() : null;
                 $data = [...$row, 'branch_id' => $branch?->id, 'department_id' => $department?->id, 'minimum_salary' => $row['minimum_salary'] ?: null, 'maximum_salary' => $row['maximum_salary'] ?: null, 'is_manager_position' => $bool($row['is_manager_position']), 'is_active' => $bool($row['is_active']), 'sort_order' => (int) ($row['sort_order'] ?: 0)];
                 $errors = $valid($data, ['code' => ['required', 'max:50'], 'title' => ['required', 'max:180'], 'minimum_salary' => ['nullable', 'numeric', 'min:0'], 'maximum_salary' => ['nullable', 'numeric', 'gte:minimum_salary']]);
-                if (! $branch) {
+                if (!$branch) {
                     $errors[] = 'Branch code does not exist.';
                 }
-                if (! $department) {
+                if (!$department) {
                     $errors[] = 'Department code does not exist in the selected branch.';
                 }
 
@@ -281,16 +283,16 @@ class BulkImportController extends Controller
                 $employment = filled($row['employment_type_code']) ? EmploymentType::query()->where('company_id', $companyId)->where('code', $row['employment_type_code'])->first() : null;
                 $data = [...$row, 'branch_id' => $branch?->id, 'department_id' => $department?->id, 'position_id' => $position?->id, 'employment_type_id' => $employment?->id, 'base_salary' => $row['base_salary'] ?: null, 'salary_currency' => strtoupper($row['salary_currency'] ?: 'USD')];
                 $errors = $valid($data, ['employee_code' => ['required', 'max:50'], 'first_name' => ['required', 'max:255'], 'last_name' => ['required', 'max:255'], 'email' => ['nullable', 'email'], 'hire_date' => ['required', 'date'], 'base_salary' => ['nullable', 'numeric', 'min:0'], 'salary_currency' => ['in:USD,KHR'], 'employment_status' => ['required', 'in:Draft,Active,On probation,On leave,Suspended,Resigned,Terminated,Retired']]);
-                if (! $branch) {
+                if (!$branch) {
                     $errors[] = 'Branch code does not exist.';
                 }
-                if (! $department) {
+                if (!$department) {
                     $errors[] = 'Department code does not exist in the selected branch.';
                 }
-                if (filled($row['position_code']) && ! $position) {
+                if (filled($row['position_code']) && !$position) {
                     $errors[] = 'Position code does not exist in the selected department.';
                 }
-                if (filled($row['employment_type_code']) && ! $employment) {
+                if (filled($row['employment_type_code']) && !$employment) {
                     $errors[] = 'Employment type code does not exist.';
                 }
 
