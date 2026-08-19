@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attendance;
-use App\Models\Company;
 use App\Models\PayrollItem;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollSetting;
 use App\Models\PublicHoliday;
+use App\Models\User;
 use App\Services\PayrollCalculatorService;
 use App\Services\PayrollWorkflowService;
 use Illuminate\Http\RedirectResponse;
@@ -120,7 +120,12 @@ class PayrollController extends Controller
 
     private function companyId(): int
     {
-        return (int) Company::query()->value('id');
+        /** @var User|null $user */
+        $user = auth()->user();
+        $companyId = $user?->companyId();
+        abort_unless($companyId !== null, 403, 'Your account is not linked to a company context.');
+
+        return $companyId;
     }
 
     private function ensurePeriodCompany(PayrollPeriod $period): void
