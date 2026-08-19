@@ -8,7 +8,9 @@
                 </div>
                 <select class="form-select reference-status" name="department_id" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
                     <option value="">All departments</option>
-                    @foreach($departments as $department)<option value="{{ $department->id }}" @selected(request('department_id') == $department->id)>{{ $department->name }}</option>@endforeach
+                    @foreach($departments as $department)
+                        <option value="{{ $department->id }}" @selected(request('department_id') == $department->id)>{{ $department->name }}{{ $department->branch?->name ? ' — '.$department->branch->name : '' }}</option>
+                    @endforeach
                 </select>
                 <select class="form-select reference-status" name="status" hx-get="{{ request()->url() }}" hx-target="[data-list-container]" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
                     <option value="">All statuses</option>
