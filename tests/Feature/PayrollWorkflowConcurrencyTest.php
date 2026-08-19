@@ -53,6 +53,32 @@ function payrollFixture(array $periodOverrides = [], array $itemOverrides = []):
 
     $processor = User::factory()->create();
     $approver = User::factory()->create();
+    Employee::query()->create([
+        'company_id' => $company->id,
+        'branch_id' => $branch->id,
+        'department_id' => $department->id,
+        'user_id' => $processor->id,
+        'employee_code' => 'PAY-PROCESSOR-'.$company->id,
+        'first_name' => 'Payroll',
+        'last_name' => 'Processor',
+        'hire_date' => '2025-01-01',
+        'employment_status' => 'Active',
+        'salary_currency' => 'USD',
+        'is_active' => true,
+    ]);
+    Employee::query()->create([
+        'company_id' => $company->id,
+        'branch_id' => $branch->id,
+        'department_id' => $department->id,
+        'user_id' => $approver->id,
+        'employee_code' => 'PAY-APPROVER-'.$company->id,
+        'first_name' => 'Payroll',
+        'last_name' => 'Approver',
+        'hire_date' => '2025-01-01',
+        'employment_status' => 'Active',
+        'salary_currency' => 'USD',
+        'is_active' => true,
+    ]);
 
     $period = PayrollPeriod::query()->create(array_merge([
         'company_id' => $company->id,
