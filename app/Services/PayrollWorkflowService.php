@@ -11,10 +11,13 @@ use Illuminate\Validation\ValidationException;
 
 class PayrollWorkflowService
 {
+    public function __construct(private readonly NotificationService $notifications) {}
+
     public function approve(PayrollPeriod $period, User $approver): PayrollPeriod
     {
         return DB::transaction(function () use ($period, $approver): PayrollPeriod {
             $period = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
+            $this->assertSameCompany($period, $approver);
 
             if ($period->status !== 'awaiting_approval') {
                 throw ValidationException::withMessages(['status' => 'វគ្គប្រាក់ខែនេះមិនស្ថិតនៅស្ថានភាពរង់ចាំអនុម័តទេ។']);
@@ -47,12 +50,16 @@ class PayrollWorkflowService
     {
         return DB::transaction(function () use ($period, $recorder, $data): PayrollPayment {
             $period = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
+            $this->assertSameCompany($period, $recorder);
 
             if ($period->status !== 'approved' || $period->payment()->exists()) {
                 throw ValidationException::withMessages(['status' => 'វគ្គនេះបានបើកប្រាក់រួច ឬមិនទាន់បានអនុម័ត។']);
             }
 
-            $items = $period->items()->lockForUpdate()->get();
+            $items = $period->items()
+                ->with('employee:id,company_id,user_id')
+                ->lockForUpdate()
+                ->get();
             if ($items->isEmpty() || $items->contains(fn ($item) => $item->payment_status === 'paid')) {
                 throw ValidationException::withMessages(['status' => 'ទិន្នន័យបើកប្រាក់មិនត្រឹមត្រូវ ឬបានកត់ត្រារួច។']);
             }
@@ -73,9 +80,7 @@ class PayrollWorkflowService
             $payment = PayrollPayment::query()->create([
                 'payroll_period_id' => $period->id,
                 'payment_method' => $data['payment_method'],
-                'reference_number' => filled($data['reference_number'] ?? null)
-                    ? $data['reference_number']
-                    : null,
+                'reference_number' => filled($data['reference_number'] ?? null) ? $data['reference_number'] : null,
                 'paid_at' => $paidAt,
                 'item_count' => $items->count(),
                 'total_usd' => $totalUsd,
@@ -88,7 +93,33 @@ class PayrollWorkflowService
             $period->items()->update(['payment_status' => 'paid', 'paid_at' => $paidAt]);
             $period->update(['status' => 'paid']);
 
+            foreach ($items as $item) {
+                $employee = $item->employee;
+                if ($employee === null || $employee->user_id === null || (int) $employee->company_id !== (int) $period->company_id) {
+                    continue;
+                }
+
+                $this->notifications->notify(
+                    (int) $employee->user_id,
+                    'payroll_paid',
+                    'Payroll paid',
+                    "Your payroll for {$period->name} has been marked paid. Net pay: ".number_format((float) $item->net_salary, 2).' '.$item->currency.'.',
+                    '/my-payroll',
+                    'money-check-dollar',
+                    'success',
+                    ['payroll_period_id' => $period->public_id],
+                    (int) $period->company_id,
+                );
+            }
+
             return $payment;
         });
+    }
+
+    private function assertSameCompany(PayrollPeriod $period, User $actor): void
+    {
+        if ($actor->companyId() !== (int) $period->company_id) {
+            throw ValidationException::withMessages(['status' => 'The payroll period does not belong to the actor company.']);
+        }
     }
 }
