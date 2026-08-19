@@ -12,7 +12,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Spatie\SimpleExcel\SimpleExcelWriter;
 use Throwable;
 
@@ -28,21 +30,53 @@ class GenerateDataExport implements ShouldQueue
 
     public function handle(): void
     {
-        $export = DataExport::query()->findOrFail($this->dataExportId);
+        $export = DB::transaction(function (): ?DataExport {
+            $locked = DataExport::query()->lockForUpdate()->findOrFail($this->dataExportId);
+
+            if ($locked->status === 'completed') {
+                return null;
+            }
+
+            if ($locked->status === 'processing') {
+                return null;
+            }
+
+            if (! in_array($locked->status, ['queued', 'failed'], true)) {
+                throw new RuntimeException("Export cannot start from status [{$locked->status}].");
+            }
+
+            if (! in_array($locked->disk, ['local', 's3'], true)) {
+                throw new RuntimeException('BizHR exports require a private local or S3 disk.');
+            }
+
+            $locked->update([
+                'status' => 'processing',
+                'progress' => 1,
+                'started_at' => now(),
+                'completed_at' => null,
+                'error_message' => null,
+            ]);
+
+            return $locked->fresh();
+        });
+
+        if ($export === null) {
+            return;
+        }
+
         $disk = Storage::disk($export->disk);
-        $path = "exports/{$export->user_id}/{$export->id}.xlsx";
+        $path = "exports/{$export->company_id}/{$export->user_id}/{$export->id}.xlsx";
         $stream = null;
         $temporaryPath = null;
 
-        $export->update([
-            'status' => 'processing',
-            'progress' => 1,
-            'started_at' => now(),
-            'error_message' => null,
-        ]);
-
         try {
-            $temporaryPath = tempnam(sys_get_temp_dir(), 'bizhr-export-').'.xlsx';
+            $temporaryBase = tempnam(sys_get_temp_dir(), 'bizhr-export-');
+            if ($temporaryBase === false) {
+                throw new RuntimeException('Unable to create a temporary export file.');
+            }
+            $temporaryPath = $temporaryBase.'.xlsx';
+            @unlink($temporaryBase);
+
             $writer = SimpleExcelWriter::create($temporaryPath);
             $writer->nameCurrentSheet('Data');
             $rowCount = match ($export->type) {
@@ -55,29 +89,35 @@ class GenerateDataExport implements ShouldQueue
 
             $stream = fopen($temporaryPath, 'rb');
             if ($stream === false || ! $disk->put($path, $stream)) {
-                throw new \RuntimeException('Unable to store the private export file.');
+                throw new RuntimeException('Unable to store the private export file.');
             }
             fclose($stream);
             $stream = null;
 
-            $export->update([
-                'status' => 'completed',
-                'progress' => 100,
-                'row_count' => $rowCount,
-                'file_path' => $path,
-                'completed_at' => now(),
-                'expires_at' => now()->addDays(7),
-            ]);
+            DataExport::query()
+                ->whereKey($export->id)
+                ->where('status', 'processing')
+                ->update([
+                    'status' => 'completed',
+                    'progress' => 100,
+                    'row_count' => $rowCount,
+                    'file_path' => $path,
+                    'completed_at' => now(),
+                    'expires_at' => now()->addDays(7),
+                ]);
         } catch (Throwable $exception) {
             if (is_resource($stream)) {
                 fclose($stream);
             }
             $disk->delete($path);
-            $export->update([
-                'status' => 'failed',
-                'error_message' => mb_substr($exception->getMessage(), 0, 2000),
-                'completed_at' => now(),
-            ]);
+            DataExport::query()
+                ->whereKey($export->id)
+                ->where('status', 'processing')
+                ->update([
+                    'status' => 'failed',
+                    'error_message' => mb_substr($exception->getMessage(), 0, 2000),
+                    'completed_at' => now(),
+                ]);
 
             throw $exception;
         } finally {
@@ -89,11 +129,14 @@ class GenerateDataExport implements ShouldQueue
 
     public function failed(Throwable $exception): void
     {
-        DataExport::query()->whereKey($this->dataExportId)->update([
-            'status' => 'failed',
-            'error_message' => mb_substr($exception->getMessage(), 0, 2000),
-            'completed_at' => now(),
-        ]);
+        DataExport::query()
+            ->whereKey($this->dataExportId)
+            ->whereNotIn('status', ['completed'])
+            ->update([
+                'status' => 'failed',
+                'error_message' => mb_substr($exception->getMessage(), 0, 2000),
+                'completed_at' => now(),
+            ]);
     }
 
     private function writeEmployees(SimpleExcelWriter $writer, DataExport $export): int
@@ -176,6 +219,7 @@ class GenerateDataExport implements ShouldQueue
         $query = PayrollItem::query()
             ->with(['employee:id,company_id,employee_code,first_name,last_name,full_name_km,full_name_en', 'period:id,name'])
             ->whereHas('employee', fn (Builder $query) => $query->where('company_id', $export->company_id))
+            ->whereHas('period', fn (Builder $query) => $query->where('company_id', $export->company_id))
             ->when($export->filters['period_id'] ?? null, fn (Builder $query, $periodId) => $query->where('payroll_period_id', $periodId))
             ->orderBy('id');
 
@@ -211,14 +255,14 @@ class GenerateDataExport implements ShouldQueue
             $written++;
 
             if ($written % 250 === 0) {
-                DataExport::query()->whereKey($this->dataExportId)->update([
+                DataExport::query()->whereKey($this->dataExportId)->where('status', 'processing')->update([
                     'progress' => $total > 0 ? min(99, 5 + (int) floor(($written / $total) * 90)) : 95,
                     'row_count' => $written,
                 ]);
             }
         }
 
-        DataExport::query()->whereKey($this->dataExportId)->update([
+        DataExport::query()->whereKey($this->dataExportId)->where('status', 'processing')->update([
             'progress' => $total > 0 ? min(99, 5 + (int) floor(($written / $total) * 90)) : 95,
             'row_count' => $written,
         ]);
