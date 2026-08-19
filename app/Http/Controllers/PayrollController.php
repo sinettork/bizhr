@@ -20,11 +20,45 @@ class PayrollController extends Controller
     public function periods(Request $request): View
     {
         $companyId = $this->companyId();
-        $query = PayrollPeriod::query()->where('company_id', $companyId)->withCount('items')->withSum('items', 'net_salary')
+        $query = PayrollPeriod::query()
+            ->where('company_id', $companyId)
+            ->withCount('items')
+            ->withSum('items', 'net_salary')
             ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', '%'.trim($request->string('search')).'%'))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')));
 
-        return view('payroll.periods.index', ['periods' => $query->latest('start_date')->paginate($this->perPage($request, 20))->withQueryString()]);
+        $latestPeriod = PayrollPeriod::query()
+            ->where('company_id', $companyId)
+            ->withCount('items')
+            ->withSum('items', 'net_salary')
+            ->latest('start_date')
+            ->first();
+
+        $summary = [
+            'open_cycles' => PayrollPeriod::query()
+                ->where('company_id', $companyId)
+                ->whereNotIn('status', ['paid', 'closed'])
+                ->count(),
+            'needs_approval' => PayrollPeriod::query()
+                ->where('company_id', $companyId)
+                ->where('status', 'awaiting_approval')
+                ->count(),
+            'awaiting_payment' => PayrollPeriod::query()
+                ->where('company_id', $companyId)
+                ->where('status', 'approved')
+                ->count(),
+            'exceptions' => PayrollItem::query()
+                ->where('exception_count', '>', 0)
+                ->whereHas('period', fn ($q) => $q->where('company_id', $companyId)->whereNotIn('status', ['paid', 'closed']))
+                ->count(),
+        ];
+
+        return view('payroll.periods.index', [
+            'periods' => $query->latest('start_date')->paginate($this->perPage($request, 20))->withQueryString(),
+            'latestPeriod' => $latestPeriod,
+            'summary' => $summary,
+            'payrollSettings' => PayrollSetting::forCompany($companyId),
+        ]);
     }
 
     public function storePeriod(Request $request): RedirectResponse
