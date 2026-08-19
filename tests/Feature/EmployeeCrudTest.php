@@ -113,6 +113,12 @@ it('requires a separate approver before a separated employee is rehired', functi
     $employee = Employee::query()->where('is_active', true)->firstOrFail();
     $employee->update(['employment_status' => 'Terminated', 'is_active' => false]);
     $requester = User::factory()->create();
+    Employee::factory()->create([
+        'company_id' => $employee->company_id,
+        'branch_id' => $employee->branch_id,
+        'department_id' => $employee->department_id,
+        'user_id' => $requester->id,
+    ]);
     $requester->givePermissionTo(['employee.edit', 'employee.view-sensitive', 'employee.approve']);
 
     $this->actingAs($requester)
