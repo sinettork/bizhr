@@ -2,9 +2,16 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property bool $is_read
+ * @property Carbon|null $read_at
+ * @property Carbon|null $expires_at
+ */
 class Notification extends Model
 {
     protected $fillable = [
@@ -44,9 +51,6 @@ class Notification extends Model
         return $this->belongsTo(Company::class);
     }
 
-    /**
-     * Mark notification as read
-     */
     public function markAsRead(): void
     {
         if (! $this->is_read) {
@@ -57,30 +61,23 @@ class Notification extends Model
         }
     }
 
-    /**
-     * Check if notification is expired
-     */
     public function isExpired(): bool
     {
-        return $this->expires_at && $this->expires_at->isPast();
+        return $this->expires_at?->isPast() ?? false;
     }
 
-    /**
-     * Scope to get unread notifications
-     */
-    public function scopeUnread($query)
+    /** @param Builder<Notification> $query */
+    public function scopeUnread(Builder $query): Builder
     {
         return $query->where('is_read', false);
     }
 
-    /**
-     * Scope to get active (not expired) notifications
-     */
-    public function scopeActive($query)
+    /** @param Builder<Notification> $query */
+    public function scopeActive(Builder $query): Builder
     {
-        return $query->where(function ($q) {
-            $q->whereNull('expires_at')
-              ->orWhere('expires_at', '>', now());
+        return $query->where(function (Builder $query): void {
+            $query->whereNull('expires_at')
+                ->orWhere('expires_at', '>', now());
         });
     }
 }
