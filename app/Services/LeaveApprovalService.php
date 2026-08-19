@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
+use App\Models\PayrollPeriod;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -147,6 +148,88 @@ class LeaveApprovalService
         });
     }
 
+    public function cancelApproved(LeaveRequest $leaveRequest, User $reviewer, string $reason): LeaveRequest
+    {
+        return DB::transaction(function () use ($leaveRequest, $reviewer, $reason): LeaveRequest {
+            $leaveRequest = LeaveRequest::query()->with('employee')->lockForUpdate()->findOrFail($leaveRequest->id);
+            $this->assertSameCompany($leaveRequest, $reviewer);
+            $this->assertHrCanReview($reviewer);
+
+            if ($leaveRequest->status !== 'approved') {
+                throw ValidationException::withMessages([
+                    'status' => 'Only a finally approved leave request can be cancelled by HR.',
+                ]);
+            }
+
+            if (CarbonImmutable::today()->gte(CarbonImmutable::parse($leaveRequest->start_date))) {
+                throw ValidationException::withMessages([
+                    'status' => 'Leave that has already started cannot be fully cancelled. Use a manual balance adjustment for any partial correction.',
+                ]);
+            }
+
+            $companyId = (int) $leaveRequest->employee->company_id;
+            $payrollLocked = PayrollPeriod::query()
+                ->where('company_id', $companyId)
+                ->whereIn('status', ['approved', 'paid', 'closed'])
+                ->whereDate('start_date', '<=', $leaveRequest->end_date)
+                ->whereDate('end_date', '>=', $leaveRequest->start_date)
+                ->exists();
+
+            if ($payrollLocked) {
+                throw ValidationException::withMessages([
+                    'status' => 'This leave overlaps a locked payroll period. Resolve payroll before cancelling the approved leave.',
+                ]);
+            }
+
+            $daysByYear = $this->dayCalculator->daysByYear(
+                $leaveRequest->employee,
+                CarbonImmutable::parse($leaveRequest->start_date),
+                CarbonImmutable::parse($leaveRequest->end_date),
+            );
+
+            if (array_sum($daysByYear) !== (int) $leaveRequest->total_days) {
+                throw ValidationException::withMessages([
+                    'status' => 'The working calendar changed after approval. Review the leave balance manually before cancellation.',
+                ]);
+            }
+
+            foreach ($daysByYear as $year => $days) {
+                $balance = LeaveBalance::query()
+                    ->where('employee_id', $leaveRequest->employee_id)
+                    ->where('leave_type_id', $leaveRequest->leave_type_id)
+                    ->where('year', $year)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if ((float) $balance->used_days < $days) {
+                    throw ValidationException::withMessages([
+                        'status' => "Leave balance for {$year} no longer contains enough used days to restore safely.",
+                    ]);
+                }
+
+                $balance->decrement('used_days', $days);
+                $balance->increment('remaining_days', $days);
+            }
+
+            $leaveRequest->update([
+                'status' => 'cancelled',
+                'cancelled_by' => $reviewer->id,
+                'cancelled_at' => now(),
+                'cancellation_reason' => trim($reason),
+            ]);
+
+            $this->notifyEmployee(
+                $leaveRequest,
+                'leave_cancelled',
+                'Approved leave cancelled',
+                'Your approved leave was cancelled by HR and the leave balance was restored. Reason: '.trim($reason),
+                'warning',
+            );
+
+            return $leaveRequest->fresh();
+        });
+    }
+
     private function assertSameCompany(LeaveRequest $leaveRequest, User $reviewer): void
     {
         $companyId = $reviewer->companyId();
@@ -191,7 +274,7 @@ class LeaveApprovalService
             '/leave/requests',
             'calendar-check',
             $level,
-            ['leave_request_id' => (string) $leaveRequest->getRouteKey()],
+            ['leave_request_id' => $leaveRequest->getRouteKey()],
             (int) $leaveRequest->employee->company_id,
         );
     }
