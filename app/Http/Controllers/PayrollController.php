@@ -14,6 +14,7 @@ use App\Services\PayrollWorkflowService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class PayrollController extends Controller
@@ -93,6 +94,32 @@ class PayrollController extends Controller
     {
         $this->ensurePeriodCompany($period);
         Gate::forUser($request->user())->authorize('approve', $period);
+        $data = $request->validate([
+            'action' => ['nullable', Rule::in(['approve', 'close', 'reopen'])],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $action = $data['action'] ?? 'approve';
+
+        if ($action === 'close') {
+            $reason = trim((string) ($data['reason'] ?? ''));
+            if (mb_strlen($reason) < 5) {
+                return back()->withErrors(['reason' => 'Provide a clear reason before closing a payroll period.']);
+            }
+            $workflow->close($period, $request->user(), $reason);
+
+            return back()->with('status', 'Payroll period closed with an audit trail.');
+        }
+
+        if ($action === 'reopen') {
+            $reason = trim((string) ($data['reason'] ?? ''));
+            if (mb_strlen($reason) < 5) {
+                return back()->withErrors(['reason' => 'Provide a clear reason before reopening a closed payroll period.']);
+            }
+            $workflow->reopen($period, $request->user(), $reason);
+
+            return back()->with('status', 'Payroll period reopened to paid status. The original payment record remains unchanged.');
+        }
+
         $workflow->approve($period, $request->user());
 
         return back()->with('status', 'Payroll period approved.');
