@@ -182,14 +182,15 @@ class HrReminderService
     /** @return list<int> */
     private function hrUserIds(int $companyId): array
     {
-        return User::query()
-            ->where('is_active', true)
-            ->whereHas('employee', fn ($query) => $query->where('company_id', $companyId))
-            ->whereHas('roles', fn ($query) => $query->whereIn('name', ['HR Administrator', 'Owner']))
-            ->pluck('id')
-            ->map(fn ($id): int => (int) $id)
-            ->values()
-            ->all();
+        return array_values(
+            User::query()
+                ->where('is_active', true)
+                ->whereHas('employee', fn ($query) => $query->where('company_id', $companyId))
+                ->whereHas('roles', fn ($query) => $query->whereIn('name', ['HR Administrator', 'Owner']))
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->all(),
+        );
     }
 
     private function notifyOnceToday(
