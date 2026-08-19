@@ -4,13 +4,15 @@ return [
     'allow_demo_data' => (bool) env('ALLOW_DEMO_DATA', false),
     /*
     |--------------------------------------------------------------------------
-    | Sensitive export storage
+    | Sensitive storage
     |--------------------------------------------------------------------------
     |
-    | Employee, attendance, and payroll exports must stay on a private disk.
-    | Supported production choices are the private local disk and private S3.
+    | Employee documents and generated exports contain sensitive HR data and
+    | must stay on private disks. Supported production choices are the private
+    | local disk and private S3-compatible object storage.
     |
     */
+    'documents_disk' => env('BIZHR_DOCUMENTS_DISK', env('FILESYSTEM_DISK', 'local')),
     'exports_disk' => env('BIZHR_EXPORTS_DISK', 'local'),
 
     'upload_security' => [
