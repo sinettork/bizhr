@@ -102,6 +102,10 @@ class LeaveApprovalService
 
     public function reject(LeaveRequest $leaveRequest, User $reviewer, ?string $note = null): LeaveRequest
     {
+        if ($leaveRequest->status === 'approved') {
+            return $this->cancelApproved($leaveRequest, $reviewer, (string) $note);
+        }
+
         return DB::transaction(function () use ($leaveRequest, $reviewer, $note): LeaveRequest {
             $leaveRequest = LeaveRequest::query()->with('employee')->lockForUpdate()->findOrFail($leaveRequest->id);
             $this->assertSameCompany($leaveRequest, $reviewer);
@@ -150,6 +154,13 @@ class LeaveApprovalService
 
     public function cancelApproved(LeaveRequest $leaveRequest, User $reviewer, string $reason): LeaveRequest
     {
+        $reason = trim($reason);
+        if (mb_strlen($reason) < 5) {
+            throw ValidationException::withMessages([
+                'status' => 'A clear cancellation reason of at least 5 characters is required.',
+            ]);
+        }
+
         return DB::transaction(function () use ($leaveRequest, $reviewer, $reason): LeaveRequest {
             $leaveRequest = LeaveRequest::query()->with('employee')->lockForUpdate()->findOrFail($leaveRequest->id);
             $this->assertSameCompany($leaveRequest, $reviewer);
@@ -215,14 +226,14 @@ class LeaveApprovalService
                 'status' => 'cancelled',
                 'cancelled_by' => $reviewer->id,
                 'cancelled_at' => now(),
-                'cancellation_reason' => trim($reason),
+                'cancellation_reason' => $reason,
             ]);
 
             $this->notifyEmployee(
                 $leaveRequest,
                 'leave_cancelled',
                 'Approved leave cancelled',
-                'Your approved leave was cancelled by HR and the leave balance was restored. Reason: '.trim($reason),
+                'Your approved leave was cancelled by HR and the leave balance was restored. Reason: '.$reason,
                 'warning',
             );
 
