@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Asset;
 use App\Models\AssetAssignment;
-use App\Models\Company;
 use App\Models\Employee;
 use App\Services\AssetWorkflowService;
 use App\Services\UploadedFileSecurityService;
@@ -22,7 +21,7 @@ class AssetController extends Controller
 {
     public function index(Request $request): View
     {
-        $companyId = $this->companyId();
+        $companyId = $this->currentCompanyId($request);
         $assets = Asset::query()
             ->where('company_id', $companyId)
             ->withCount(['assignments as open_assignments' => fn ($q) => $q->where('status', 'assigned')])
@@ -58,14 +57,15 @@ class AssetController extends Controller
 
     public function store(Request $request, UploadedFileSecurityService $fileSecurity): RedirectResponse
     {
-        $data = $this->validated($request);
+        $companyId = $this->currentCompanyId($request);
+        $data = $this->validated($request, null, $companyId);
         $image = $request->file('image');
         if ($image instanceof UploadedFile) {
             $fileSecurity->assertSafe($image, 'image');
-            $data['image_path'] = $image->store('assets/'.$this->companyId(), 'public');
+            $data['image_path'] = $image->store('assets/'.$companyId, 'public');
         }
 
-        Asset::query()->create(['company_id' => $this->companyId(), ...$data]);
+        Asset::query()->create(['company_id' => $companyId, ...$data]);
         $response = back()->with('status', 'Asset created.');
 
         return $request->input('save_action') === 'new' ? $response->with('open_modal', 'createAsset') : $response;
@@ -73,9 +73,10 @@ class AssetController extends Controller
 
     public function update(Request $request, Asset $asset, UploadedFileSecurityService $fileSecurity): RedirectResponse
     {
-        abort_unless($asset->company_id === $this->companyId(), 404);
+        $companyId = $this->currentCompanyId($request);
+        abort_unless($asset->company_id === $companyId, 404);
         Gate::forUser($request->user())->authorize('manage', $asset);
-        $data = $this->validated($request, $asset);
+        $data = $this->validated($request, $asset, $companyId);
         if ($asset->status === 'assigned') {
             unset($data['condition']);
         }
@@ -84,7 +85,7 @@ class AssetController extends Controller
         $newImagePath = null;
         if ($image instanceof UploadedFile) {
             $fileSecurity->assertSafe($image, 'image');
-            $newImagePath = $image->store('assets/'.$this->companyId(), 'public');
+            $newImagePath = $image->store('assets/'.$companyId, 'public');
             $data['image_path'] = $newImagePath;
         }
 
@@ -107,7 +108,7 @@ class AssetController extends Controller
 
     public function destroy(Request $request, Asset $asset): RedirectResponse
     {
-        abort_unless($asset->company_id === $this->companyId(), 404);
+        abort_unless($asset->company_id === $this->currentCompanyId($request), 404);
         Gate::forUser($request->user())->authorize('manage', $asset);
         if ($asset->assignments()->where('status', 'assigned')->exists()) {
             return back()->withErrors(['asset' => 'Return the assigned asset before archiving it.']);
@@ -120,10 +121,15 @@ class AssetController extends Controller
 
     public function assign(Request $request, Asset $asset, AssetWorkflowService $workflow): RedirectResponse
     {
-        abort_unless($asset->company_id === $this->companyId(), 404);
+        $companyId = $this->currentCompanyId($request);
+        abort_unless($asset->company_id === $companyId, 404);
         Gate::forUser($request->user())->authorize('manage', $asset);
-        $data = $request->validate(['employee_id' => ['required', 'integer', 'exists:employees,id'], 'condition_out' => ['required', 'in:new,good,fair,poor'], 'expected_return_date' => ['nullable', 'date', 'after_or_equal:today']]);
-        $employee = Employee::query()->whereKey($data['employee_id'])->where('company_id', $asset->company_id)->firstOrFail();
+        $data = $request->validate([
+            'employee_id' => ['required', 'integer', Rule::exists('employees', 'id')->where('company_id', $companyId)],
+            'condition_out' => ['required', 'in:new,good,fair,poor'],
+            'expected_return_date' => ['nullable', 'date', 'after_or_equal:today'],
+        ]);
+        $employee = Employee::query()->whereKey($data['employee_id'])->where('company_id', $companyId)->firstOrFail();
         $this->runWorkflow(fn () => $workflow->assign($asset, $employee, $request->user(), $data['condition_out'], $data['expected_return_date'] ?? null));
 
         return back()->with('status', 'Asset assigned.');
@@ -131,7 +137,8 @@ class AssetController extends Controller
 
     public function receive(Request $request, AssetAssignment $assignment, AssetWorkflowService $workflow): RedirectResponse
     {
-        abort_unless($assignment->asset()->where('company_id', $this->companyId())->exists(), 404);
+        $companyId = $this->currentCompanyId($request);
+        abort_unless($assignment->asset()->where('company_id', $companyId)->exists(), 404);
         if (! $request->user()->can('asset.manage')) {
             abort_unless($assignment->employee_id === $request->user()->employee?->id, 403);
         }
@@ -143,24 +150,29 @@ class AssetController extends Controller
 
     public function mine(Request $request): View
     {
-        abort_unless($request->user()->employee !== null, 403);
+        $employee = $request->user()->employee;
+        abort_unless($employee !== null, 403);
+        abort_unless($employee->company_id === $this->currentCompanyId($request), 403);
 
-        return view('assets.mine', ['assignments' => AssetAssignment::query()->with('asset')->where('employee_id', $request->user()->employee->id)->latest('assigned_date')->paginate($this->perPage($request, 20))->withQueryString()]);
-    }
-
-    private function companyId(): int
-    {
-        return (int) Company::query()->value('id');
+        return view('assets.mine', [
+            'assignments' => AssetAssignment::query()
+                ->with('asset')
+                ->where('employee_id', $employee->id)
+                ->whereHas('asset', fn ($q) => $q->where('company_id', $employee->company_id))
+                ->latest('assigned_date')
+                ->paginate($this->perPage($request, 20))
+                ->withQueryString(),
+        ]);
     }
 
     /** @return array<string, mixed> */
-    private function validated(Request $request, ?Asset $asset = null): array
+    private function validated(Request $request, ?Asset $asset, int $companyId): array
     {
         $data = $request->validate([
-            'asset_code' => ['required', 'string', 'max:80', Rule::unique('assets')->where('company_id', $this->companyId())->ignore($asset)],
+            'asset_code' => ['required', 'string', 'max:80', Rule::unique('assets')->where('company_id', $companyId)->ignore($asset)],
             'name' => ['required', 'string', 'max:200'],
             'category' => ['required', 'string', 'max:100'],
-            'serial_number' => ['nullable', 'string', 'max:150', Rule::unique('assets')->where('company_id', $this->companyId())->ignore($asset)],
+            'serial_number' => ['nullable', 'string', 'max:150', Rule::unique('assets')->where('company_id', $companyId)->ignore($asset)],
             'purchase_date' => ['nullable', 'date'],
             'purchase_cost' => ['nullable', 'numeric', 'min:0'],
             'currency' => ['required', 'in:USD,KHR'],
