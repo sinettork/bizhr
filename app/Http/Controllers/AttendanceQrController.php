@@ -19,11 +19,11 @@ class AttendanceQrController extends Controller
 {
     public function display(Request $request): View
     {
-        $companyId = $request->user()->employee?->company_id;
+        $companyId = $this->currentCompanyId($request);
         $branches = Branch::query()
+            ->where('company_id', $companyId)
             ->where('is_active', true)
             ->where('attendance_qr_enabled', true)
-            ->when($companyId, fn ($query) => $query->where('company_id', $companyId))
             ->orderByDesc('is_head_office')
             ->orderBy('name')
             ->get();
@@ -43,6 +43,7 @@ class AttendanceQrController extends Controller
 
     public function create(Request $request): RedirectResponse
     {
+        $companyId = $this->currentCompanyId($request);
         $data = $request->validate([
             'branch_id' => ['required', 'integer'],
             'lifetime_seconds' => ['nullable', 'integer', 'min:30', 'max:120'],
@@ -50,12 +51,10 @@ class AttendanceQrController extends Controller
 
         $branch = Branch::query()
             ->whereKey($data['branch_id'])
+            ->where('company_id', $companyId)
             ->where('is_active', true)
             ->where('attendance_qr_enabled', true)
             ->firstOrFail();
-
-        $actorCompanyId = $request->user()->employee?->company_id;
-        abort_unless(! $actorCompanyId || (int) $branch->company_id === (int) $actorCompanyId, 404);
 
         if (! $branch->attendance_qr_token) {
             $branch->regenerateAttendanceQrToken();
@@ -79,26 +78,31 @@ class AttendanceQrController extends Controller
         ]);
     }
 
-    public function verify(string $token): View
+    public function verify(Request $request, string $token): View
     {
         $session = $this->session($token);
+        abort_unless((int) $session->branch->company_id === $this->currentCompanyId($request), 404);
 
         return view('attendance.qr.verify', compact('token', 'session'));
     }
 
     public function record(Request $request, string $token, AttendanceQrService $service): JsonResponse
     {
+        $maxAccuracy = max(1, (float) config('attendance.qr.maximum_accuracy_meters', 100));
         $data = $request->validate([
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
-            'accuracy' => ['required', 'numeric', 'gt:0', 'max:100'],
+            'accuracy' => ['required', 'numeric', 'gt:0', 'max:'.$maxAccuracy],
         ]);
 
         $employee = $request->user()->employee;
         abort_unless($employee !== null, 403, 'Your account is not linked to an employee.');
+        $companyId = $this->currentCompanyId($request);
+        abort_unless((int) $employee->company_id === $companyId, 403);
 
-        $result = DB::transaction(function () use ($token, $data, $employee, $request, $service): array {
+        $result = DB::transaction(function () use ($token, $data, $employee, $request, $service, $companyId): array {
             $session = $this->session($token, true);
+            abort_unless((int) $session->branch->company_id === $companyId, 404);
             abort_if(AttendanceQrScanEvent::query()->where('attendance_qr_session_id', $session->id)->where('employee_id', $employee->id)->exists(), 422, 'This QR code was already used by your account.');
             $result = $service->process($employee, $session->branch->attendanceQrPayload(), (float) $data['latitude'], (float) $data['longitude'], $request->ip(), $request->userAgent());
 
