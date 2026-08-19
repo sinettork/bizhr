@@ -13,10 +13,10 @@ class AssetWorkflowService
 {
     public function assign(Asset $asset, Employee $employee, User $actor, string $condition, ?string $dueDate): AssetAssignment
     {
-        $this->assertActorCompany((int) $asset->company_id, $actor);
         if ($asset->status !== 'available') {
             throw new DomainException('Only an available asset can be assigned.');
         }
+        $this->assertActorCompany((int) $asset->company_id, $actor);
 
         return DB::transaction(function () use ($asset, $employee, $actor, $condition, $dueDate) {
             $asset = Asset::query()->lockForUpdate()->findOrFail($asset->id);
