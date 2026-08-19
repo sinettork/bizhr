@@ -10,6 +10,7 @@
     <script src="{{ asset('vendor/htmx/htmx.min.js') }}"></script>
     <script nonce="{{ request()->attributes->get('csp_nonce') }}">htmx.config.historyCacheSize = 0; htmx.config.allowScriptTags = false; htmx.config.selfRequestsOnly = true; htmx.config.timeout = 15000;</script>
     <script src="{{ asset('js/htmx-guard.js') }}"></script>
+    <script src="{{ asset('js/confirmation-dialog.js') }}"></script>
     <script src="{{ asset('js/app.js') }}"></script>
     @if(session('open_modal'))<script nonce="{{ request()->attributes->get('csp_nonce') }}">document.addEventListener('DOMContentLoaded', () => bootstrap.Modal.getOrCreateInstance(document.getElementById(@json(session('open_modal')))).show());</script>@endif
     @stack('scripts')
