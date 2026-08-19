@@ -46,7 +46,10 @@ class EmployeeDocumentController extends Controller
         $file = $request->file('document');
         abort_unless($file !== null, 422);
         $fileSecurity->assertSafe($file, 'document');
-        $path = $file->store('employee-documents/'.$employee->id, $this->documentsDisk());
+        $path = $file->store(
+            "companies/{$employee->company_id}/employees/{$employee->id}/documents",
+            $this->documentsDisk(),
+        );
 
         $employee->documents()->create([
             ...array_diff_key($data, ['document' => true]),
