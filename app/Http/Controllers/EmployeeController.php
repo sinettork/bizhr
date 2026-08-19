@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\EmploymentHistory;
 use App\Models\EmploymentType;
 use App\Models\Position;
+use App\Models\User;
 use App\Services\UploadedFileSecurityService;
 use BaconQrCode\Renderer\GDLibRenderer;
 use BaconQrCode\Writer;
@@ -22,6 +23,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeController extends Controller
@@ -108,8 +110,8 @@ class EmployeeController extends Controller
     public function store(Request $request, UploadedFileSecurityService $fileSecurity): RedirectResponse
     {
         abort_unless($request->user()->can('employee.create'), 403);
-
-        $this->prepareGeneratedCode($request, 'employee_code', 'employees', 'employee_code', 'EMP', ['first_name', 'last_name', 'full_name_en'], 'company_id', $this->company()->id);
+        $companyId = $this->currentCompanyId($request);
+        $this->prepareGeneratedCode($request, 'employee_code', 'employees', 'employee_code', 'EMP', ['first_name', 'last_name', 'full_name_en'], 'company_id', $companyId);
 
         $employee = DB::transaction(function () use ($request, $fileSecurity): Employee {
             $employee = Employee::query()->create($this->validated($request, null, $fileSecurity));
@@ -128,16 +130,15 @@ class EmployeeController extends Controller
     public function show(Request $request, Employee $employee): View
     {
         $this->authorizeEmployee($request, $employee);
-        $employee->load([
-            'branch',
-            'department',
-            'position',
-            'employmentType',
-            'documents',
-            'employmentHistories' => fn ($query) => $query->with(['department', 'position', 'recordedBy'])->latest('effective_date'),
-        ]);
+        $canViewSensitive = Gate::forUser($request->user())->allows('viewSensitive', $employee);
+        $relations = ['branch', 'department', 'position', 'employmentType'];
+        if ($canViewSensitive) {
+            $relations['documents'] = fn ($query) => $query->latest();
+            $relations['employmentHistories'] = fn ($query) => $query->with(['department', 'position', 'recordedBy'])->latest('effective_date');
+        }
+        $employee->load($relations);
 
-        return view('employees.show', compact('employee'));
+        return view('employees.show', compact('employee', 'canViewSensitive'));
     }
 
     public function idCard(Request $request, Employee $employee): View
@@ -191,8 +192,12 @@ class EmployeeController extends Controller
     {
         $this->authorizeEmployee($request, $employee);
         abort_unless($employee->profile_photo !== null, 404);
-        $disk = str_starts_with($employee->profile_photo, 'private/') ? 'local' : 'public';
-        abort_unless(Storage::disk($disk)->exists($employee->profile_photo), 404);
+
+        $candidateDisks = str_starts_with($employee->profile_photo, 'private/')
+            ? [$this->profilePhotoDisk(), 'local']
+            : ['public'];
+        $disk = collect($candidateDisks)->first(fn (string $candidate) => Storage::disk($candidate)->exists($employee->profile_photo));
+        abort_unless(is_string($disk), 404);
 
         return Storage::disk($disk)->response($employee->profile_photo, null, [
             'Cache-Control' => 'private, max-age=300, no-transform',
@@ -210,7 +215,8 @@ class EmployeeController extends Controller
     public function update(Request $request, Employee $employee, UploadedFileSecurityService $fileSecurity): RedirectResponse
     {
         $this->authorizeEmployee($request, $employee, true);
-        $this->prepareGeneratedCode($request, 'employee_code', 'employees', 'employee_code', 'EMP', ['first_name', 'last_name', 'full_name_en'], 'company_id', $this->company()->id, $employee->id);
+        $companyId = $this->currentCompanyId($request);
+        $this->prepareGeneratedCode($request, 'employee_code', 'employees', 'employee_code', 'EMP', ['first_name', 'last_name', 'full_name_en'], 'company_id', $companyId, $employee->id);
         $original = $employee->only(['branch_id', 'department_id', 'position_id', 'employment_type_id', 'base_salary', 'salary_currency', 'employment_status']);
         $data = $this->validated($request, $employee, $fileSecurity);
         $trackedChanges = array_filter(
@@ -244,7 +250,7 @@ class EmployeeController extends Controller
 
     public function destroy(Request $request, Employee $employee): RedirectResponse
     {
-        abort_unless($employee->company_id === $this->company()->id, 404);
+        abort_unless((int) $employee->company_id === $this->currentCompanyId($request), 404);
         Gate::forUser($request->user())->authorize('delete', $employee);
 
         DB::transaction(function () use ($employee): void {
@@ -314,7 +320,7 @@ class EmployeeController extends Controller
     private function validated(Request $request, ?Employee $employee = null, ?UploadedFileSecurityService $fileSecurity = null): array
     {
         $company = $this->company();
-        $employeeCode = Rule::unique('employees', 'employee_code');
+        $employeeCode = Rule::unique('employees', 'employee_code')->where('company_id', $company->id);
         if ($employee) {
             $employeeCode->ignore($employee->id);
         }
@@ -361,9 +367,6 @@ class EmployeeController extends Controller
         }
 
         $data['employee_code'] = strtoupper(trim($data['employee_code']));
-        if (Employee::query()->where('company_id', $company->id)->where('employee_code', $data['employee_code'])->when($employee, fn ($query) => $query->whereKeyNot($employee->id))->exists()) {
-            throw ValidationException::withMessages(['employee_code' => 'Employee code already exists. Please choose a unique code.']);
-        }
         $data['first_name'] = trim($data['first_name']);
         $data['last_name'] = trim($data['last_name']);
         $data['is_active'] = $request->boolean('is_active');
@@ -382,7 +385,7 @@ class EmployeeController extends Controller
                 $this->deleteProfilePhoto($employee->profile_photo);
             }
             $employeeDirectory = $employee?->id ?: 'new';
-            $data['profile_photo'] = $request->file('profile_photo')->store("private/companies/{$company->id}/employees/{$employeeDirectory}/profile-photos", 'local');
+            $data['profile_photo'] = $request->file('profile_photo')->store("private/companies/{$company->id}/employees/{$employeeDirectory}/profile-photos", $this->profilePhotoDisk());
         } elseif (! $request->boolean('remove_profile_photo')) {
             unset($data['profile_photo']);
         }
@@ -392,7 +395,7 @@ class EmployeeController extends Controller
 
     private function authorizeEmployee(Request $request, Employee $employee, bool $editing = false): void
     {
-        abort_unless($employee->company_id === $this->company()->id, 404);
+        abort_unless((int) $employee->company_id === $this->currentCompanyId($request), 404);
         Gate::forUser($request->user())->authorize($editing ? 'update' : 'view', $employee);
     }
 
@@ -411,7 +414,27 @@ class EmployeeController extends Controller
 
     private function deleteProfilePhoto(string $path): void
     {
-        Storage::disk(str_starts_with($path, 'private/') ? 'local' : 'public')->delete($path);
+        if (str_starts_with($path, 'private/')) {
+            foreach (array_unique([$this->profilePhotoDisk(), 'local']) as $disk) {
+                if (Storage::disk($disk)->exists($path)) {
+                    Storage::disk($disk)->delete($path);
+                }
+            }
+
+            return;
+        }
+
+        Storage::disk('public')->delete($path);
+    }
+
+    private function profilePhotoDisk(): string
+    {
+        $disk = (string) config('bizhr.documents_disk', 'local');
+        if (! in_array($disk, ['local', 's3'], true)) {
+            throw new RuntimeException('BizHR profile photos require a private local or S3 disk.');
+        }
+
+        return $disk;
     }
 
     private function recordLifecycleEvent(Employee $employee, string $event, string $reason, Request $request): void
@@ -433,7 +456,12 @@ class EmployeeController extends Controller
 
     private function company(): Company
     {
-        return Company::query()->firstOrFail();
+        /** @var User|null $user */
+        $user = auth()->user();
+        $companyId = $user?->companyId();
+        abort_unless($companyId !== null, 403, 'Your account is not linked to a company context.');
+
+        return Company::query()->findOrFail($companyId);
     }
 
     /** @return list<string> */
