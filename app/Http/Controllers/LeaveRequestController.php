@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Services\LeaveApprovalService;
@@ -17,10 +18,12 @@ class LeaveRequestController extends Controller
     public function index(Request $request): View
     {
         abort_unless($request->user()->can('leave.request'), 403);
-        $employee = $request->user()->employee;
-        abort_unless($employee !== null, 403);
         $companyId = $this->currentCompanyId($request);
-        abort_unless((int) $employee->company_id === $companyId, 403);
+        $employee = Employee::query()
+            ->where('user_id', $request->user()->id)
+            ->where('company_id', $companyId)
+            ->first();
+        abort_unless($employee !== null, 403);
 
         $types = LeaveType::query()
             ->where('company_id', $companyId)
@@ -53,10 +56,12 @@ class LeaveRequestController extends Controller
     public function store(Request $request, LeaveRequestService $service): RedirectResponse
     {
         abort_unless($request->user()->can('leave.request'), 403);
-        $employee = $request->user()->employee;
-        abort_unless($employee !== null, 403);
         $companyId = $this->currentCompanyId($request);
-        abort_unless((int) $employee->company_id === $companyId, 403);
+        $employee = Employee::query()
+            ->where('user_id', $request->user()->id)
+            ->where('company_id', $companyId)
+            ->first();
+        abort_unless($employee !== null, 403);
 
         $data = $request->validate([
             'leave_type_id' => ['required', 'integer', Rule::exists('leave_types', 'id')->where('company_id', $companyId)],
@@ -82,12 +87,31 @@ class LeaveRequestController extends Controller
         return back()->with('status', 'បានដាក់សំណើឈប់សម្រាកដោយជោគជ័យ។');
     }
 
+    public function withdraw(LeaveRequest $leaveRequest, Request $request, LeaveRequestService $service): RedirectResponse
+    {
+        abort_unless($request->user()->can('leave.request'), 403);
+        $companyId = $this->currentCompanyId($request);
+        $employee = Employee::query()
+            ->where('user_id', $request->user()->id)
+            ->where('company_id', $companyId)
+            ->first();
+        abort_unless($employee !== null, 403);
+        abort_unless($leaveRequest->employee()->where('company_id', $companyId)->whereKey($employee->id)->exists(), 404);
+
+        $service->withdraw($leaveRequest, $employee);
+
+        return back()->with('status', 'បានដកសំណើឈប់សម្រាកវិញ។');
+    }
+
     public function review(Request $request): View
     {
         abort_unless($request->user()?->can('leave.approve'), 403);
         $user = $request->user();
         $companyId = $this->currentCompanyId($request);
-        $actor = $user->employee;
+        $actor = Employee::query()
+            ->where('user_id', $user->id)
+            ->where('company_id', $companyId)
+            ->first();
 
         $query = LeaveRequest::query()->with([
             'employee.branch',
@@ -99,7 +123,7 @@ class LeaveRequestController extends Controller
         ])->whereHas('employee', fn (Builder $employeeQuery) => $employeeQuery->where('company_id', $companyId));
 
         if ($user->hasRole('Manager')) {
-            abort_unless($actor !== null && (int) $actor->company_id === $companyId, 403);
+            abort_unless($actor !== null, 403);
             $query->where('status', 'pending')
                 ->whereHas('employee', fn (Builder $employeeQuery) => $employeeQuery
                     ->where('company_id', $companyId)
