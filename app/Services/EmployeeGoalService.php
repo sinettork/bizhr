@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Employee;
 use App\Models\EmployeeGoal;
 use App\Models\User;
 use DomainException;
@@ -11,7 +12,8 @@ class EmployeeGoalService
 {
     public function submitProgress(EmployeeGoal $goal, User $actor, float $value, ?string $note): EmployeeGoal
     {
-        if ($actor->employee?->id !== $goal->employee_id) {
+        $this->assertSameCompany($goal, $actor);
+        if ($this->employeeIdForUser($actor) !== $goal->employee_id) {
             throw new DomainException('You can submit progress only for your own goal.');
         }
         if (! in_array($goal->status, ['active', 'returned'], true)) {
@@ -35,10 +37,11 @@ class EmployeeGoalService
     {
         return DB::transaction(function () use ($goal, $reviewer, $approved, $note) {
             $goal = EmployeeGoal::query()->lockForUpdate()->findOrFail($goal->id);
+            $this->assertSameCompany($goal, $reviewer);
             if ($goal->status !== 'pending_review') {
                 throw new DomainException('Only submitted progress can be reviewed.');
             }
-            if ($reviewer->employee?->id === $goal->employee_id && ! $reviewer->hasRole('Super Admin')) {
+            if ($this->employeeIdForUser($reviewer) === $goal->employee_id && ! $reviewer->hasRole('Super Admin')) {
                 throw new DomainException('An employee cannot review their own progress.');
             }
 
@@ -78,5 +81,19 @@ class EmployeeGoalService
         };
 
         return round(min(100, max(0, $score)), 2);
+    }
+
+    private function assertSameCompany(EmployeeGoal $goal, User $actor): void
+    {
+        if ($actor->companyId() !== (int) $goal->company_id) {
+            throw new DomainException('The employee goal does not belong to the actor company.');
+        }
+    }
+
+    private function employeeIdForUser(User $user): ?int
+    {
+        $employeeId = Employee::query()->where('user_id', $user->id)->value('id');
+
+        return $employeeId === null ? null : (int) $employeeId;
     }
 }
