@@ -6,7 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
-/** @property Carbon $expires_at */
+/**
+ * @property int $applicant_id
+ * @property Carbon $expires_at
+ */
 class JobOffer extends Model
 {
     protected $guarded = [];
