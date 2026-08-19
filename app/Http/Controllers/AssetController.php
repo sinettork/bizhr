@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use RuntimeException;
 
 class AssetController extends Controller
 {
@@ -62,7 +63,11 @@ class AssetController extends Controller
         $image = $request->file('image');
         if ($image instanceof UploadedFile) {
             $fileSecurity->assertSafe($image, 'image');
-            $data['image_path'] = $image->store('assets/'.$companyId, 'public');
+            $storedPath = $image->store('assets/'.$companyId, 'public');
+            if (! is_string($storedPath)) {
+                throw new RuntimeException('Unable to store the asset image.');
+            }
+            $data['image_path'] = $storedPath;
         }
 
         Asset::query()->create(['company_id' => $companyId, ...$data]);
@@ -85,7 +90,11 @@ class AssetController extends Controller
         $newImagePath = null;
         if ($image instanceof UploadedFile) {
             $fileSecurity->assertSafe($image, 'image');
-            $newImagePath = $image->store('assets/'.$companyId, 'public');
+            $storedPath = $image->store('assets/'.$companyId, 'public');
+            if (! is_string($storedPath)) {
+                throw new RuntimeException('Unable to store the asset image.');
+            }
+            $newImagePath = $storedPath;
             $data['image_path'] = $newImagePath;
         }
 
@@ -140,7 +149,8 @@ class AssetController extends Controller
         $companyId = $this->currentCompanyId($request);
         abort_unless($assignment->asset()->where('company_id', $companyId)->exists(), 404);
         if (! $request->user()->can('asset.manage')) {
-            abort_unless($assignment->employee_id === $request->user()->employee?->id, 403);
+            $employeeId = Employee::query()->where('user_id', $request->user()->id)->value('id');
+            abort_unless((int) $assignment->employee_id === (int) $employeeId, 403);
         }
         $data = $request->validate(['condition_in' => ['required', 'in:new,good,fair,poor,lost,retired'], 'notes' => ['nullable', 'string', 'max:2000']]);
         $this->runWorkflow(fn () => $workflow->receive($assignment, $request->user(), $data['condition_in'], $data['notes'] ?? null));
@@ -150,7 +160,7 @@ class AssetController extends Controller
 
     public function mine(Request $request): View
     {
-        $employee = $request->user()->employee;
+        $employee = Employee::query()->where('user_id', $request->user()->id)->first();
         abort_unless($employee !== null, 403);
         abort_unless($employee->company_id === $this->currentCompanyId($request), 403);
 
