@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
-use App\Models\Company;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmploymentType;
 use App\Models\Position;
+use App\Models\User;
 use App\Services\UploadedFileSecurityService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,8 +25,11 @@ class BulkImportController extends Controller
 {
     private const MAX_ROWS = 2000;
 
+    private const PREVIEW_LIFETIME_MINUTES = 30;
+
     public function index(Request $request): View
     {
+        $this->currentCompanyId($request);
         $types = $this->availableTypes($request);
         $selectedType = $request->string('type')->toString();
         abort_if($selectedType && ! array_key_exists($selectedType, $types), 404);
@@ -36,6 +39,7 @@ class BulkImportController extends Controller
 
     public function template(Request $request, string $type): StreamedResponse|BinaryFileResponse
     {
+        $this->currentCompanyId($request);
         $definition = $this->definition($type, $request);
 
         if ($request->string('format', 'xlsx')->lower()->toString() === 'csv') {
@@ -54,7 +58,10 @@ class BulkImportController extends Controller
             }, "bizhr-{$type}-template.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);
         }
 
-        $path = tempnam(sys_get_temp_dir(), 'bizhr-import-').'.xlsx';
+        $temporaryBase = tempnam(sys_get_temp_dir(), 'bizhr-import-');
+        abort_if($temporaryBase === false, 500, 'Unable to create the import template.');
+        $path = $temporaryBase.'.xlsx';
+        @unlink($temporaryBase);
         $writer = SimpleExcelWriter::create($path);
         $writer->nameCurrentSheet('Data')->addHeader($definition['headers'])->addRow($definition['example']);
         $writer->addNewSheetAndMakeItCurrent('Instructions')
@@ -74,9 +81,11 @@ class BulkImportController extends Controller
 
     public function preview(Request $request, string $type, UploadedFileSecurityService $fileSecurity): RedirectResponse
     {
+        $companyId = $this->currentCompanyId($request);
         $definition = $this->definition($type, $request);
         $request->validate(['file' => ['required', 'file', 'mimes:xlsx,csv,txt', 'max:5120']]);
         $file = $request->file('file');
+        abort_unless($file !== null, 422);
         $fileSecurity->assertSafe($file, 'file');
         $extension = strtolower($file->getClientOriginalExtension());
         $reader = SimpleExcelReader::create($file->getRealPath(), $extension === 'xlsx' ? 'xlsx' : 'csv');
@@ -92,6 +101,7 @@ class BulkImportController extends Controller
 
             return back()->withErrors(['file' => 'Template columns do not match. Download the latest template and do not rename or reorder columns.']);
         }
+
         $rows = [];
         $line = 1;
         foreach ($fileRows->skip(1) as $values) {
@@ -110,11 +120,20 @@ class BulkImportController extends Controller
             $rows[] = ['line' => $line, 'raw' => $raw, 'data' => $result['data'], 'errors' => $result['errors']];
         }
         $reader->close();
+
         if (! $rows) {
             return back()->withErrors(['file' => 'The file has no data rows.']);
         }
+
         $token = Str::random(48);
-        $request->session()->put("bulk_imports.{$token}", ['type' => $type, 'rows' => $rows, 'created_at' => now()->timestamp]);
+        $request->session()->put("bulk_imports.{$token}", [
+            'type' => $type,
+            'user_id' => $request->user()->id,
+            'company_id' => $companyId,
+            'rows' => $rows,
+            'created_at' => now()->timestamp,
+            'expires_at' => now()->addMinutes(self::PREVIEW_LIFETIME_MINUTES)->timestamp,
+        ]);
 
         return redirect()->route('imports.preview.show', ['type' => $type, 'token' => $token]);
     }
@@ -123,7 +142,7 @@ class BulkImportController extends Controller
     {
         $definition = $this->definition($type, $request);
         $saved = $request->session()->get("bulk_imports.{$token}");
-        abort_unless(is_array($saved) && ($saved['type'] ?? null) === $type && is_array($saved['rows'] ?? null), 419, 'Import preview has expired. Upload the file again.');
+        $this->assertPreviewContext($request, $type, $saved);
 
         $rows = collect($saved['rows']);
         $perPage = 50;
@@ -150,14 +169,19 @@ class BulkImportController extends Controller
     public function confirm(Request $request, string $type): RedirectResponse
     {
         $definition = $this->definition($type, $request);
-        $data = $request->validate(['token' => ['required', 'string']]);
-        $saved = $request->session()->pull("bulk_imports.{$data['token']}");
-        abort_unless(is_array($saved) && ($saved['type'] ?? null) === $type && is_array($saved['rows'] ?? null), 419, 'Import preview has expired. Upload the file again.');
+        $data = $request->validate(['token' => ['required', 'string', 'size:48']]);
+        $sessionKey = "bulk_imports.{$data['token']}";
+        $saved = $request->session()->get($sessionKey);
+        $this->assertPreviewContext($request, $type, $saved);
+
         $invalid = collect($saved['rows'])->filter(fn ($row) => ! empty($row['errors']));
         if ($invalid->isNotEmpty()) {
+            $request->session()->forget($sessionKey);
+
             return redirect()->route('imports.index')->withErrors(['file' => 'Fix all invalid rows before confirming the import.']);
         }
-        $companyId = $this->companyId();
+
+        $companyId = $this->currentCompanyId($request);
         $created = 0;
         $updated = 0;
         DB::transaction(function () use ($saved, $definition, $companyId, &$created, &$updated): void {
@@ -166,6 +190,7 @@ class BulkImportController extends Controller
                 $action === 'created' ? $created++ : $updated++;
             }
         });
+        $request->session()->forget($sessionKey);
 
         return redirect()->route('imports.index')->with('status', "Import complete: {$created} created, {$updated} updated.");
     }
@@ -176,7 +201,13 @@ class BulkImportController extends Controller
         $user = $request->user();
         abort_unless($user !== null, 403);
 
-        return array_filter(['branches' => ['label' => 'Branches', 'permission' => 'branch.create'], 'departments' => ['label' => 'Departments', 'permission' => 'department.create'], 'positions' => ['label' => 'Positions', 'permission' => 'position.create'], 'employment-types' => ['label' => 'Employment types', 'permission' => 'employment-type.create'], 'employees' => ['label' => 'Employees', 'permission' => 'employee.create']], fn (array $item): bool => $user->can($item['permission']));
+        return array_filter([
+            'branches' => ['label' => 'Branches', 'permission' => 'branch.create'],
+            'departments' => ['label' => 'Departments', 'permission' => 'department.create'],
+            'positions' => ['label' => 'Positions', 'permission' => 'position.create'],
+            'employment-types' => ['label' => 'Employment types', 'permission' => 'employment-type.create'],
+            'employees' => ['label' => 'Employees', 'permission' => 'employee.create'],
+        ], fn (array $item): bool => $user->can($item['permission']));
     }
 
     /**
@@ -190,8 +221,15 @@ class BulkImportController extends Controller
      */
     private function definition(string $type, Request $request): array
     {
-        $permissions = ['branches' => 'branch.create', 'departments' => 'department.create', 'positions' => 'position.create', 'employment-types' => 'employment-type.create', 'employees' => 'employee.create'];
+        $permissions = [
+            'branches' => 'branch.create',
+            'departments' => 'department.create',
+            'positions' => 'position.create',
+            'employment-types' => 'employment-type.create',
+            'employees' => 'employee.create',
+        ];
         abort_unless(isset($permissions[$type]) && $request->user()->can($permissions[$type]), 404);
+        $this->currentCompanyId($request);
         $bool = fn ($value) => in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'y'], true);
         $valid = function (array $data, array $rules): array {
             $validator = Validator::make($data, $rules);
@@ -216,13 +254,15 @@ class BulkImportController extends Controller
                 return ['data' => $data, 'errors' => $errors];
             }, 'save' => fn ($data, $companyId) => Department::query()->updateOrCreate(['company_id' => $companyId, 'branch_id' => $data['branch_id'], 'code' => $data['code']], ['name' => $data['name'], 'manager_name' => $data['manager_name'] ?: null, 'phone' => $data['phone'] ?: null, 'email' => $data['email'] ?: null, 'description' => $data['description'] ?: null, 'is_active' => $data['is_active']])->wasRecentlyCreated ? 'created' : 'updated'],
             'positions' => ['title' => 'Positions', 'headers' => ['branch_code', 'department_code', 'code', 'title', 'minimum_salary', 'maximum_salary', 'is_manager_position', 'is_active', 'sort_order', 'description'], 'example' => ['PPH-HO', 'HR', 'HR-OFF', 'HR Officer', '400', '700', 'no', 'yes', '10', 'HR operations role'], 'prepare' => function ($row) use ($bool, $valid) {
-                $branch = Branch::query()->where('company_id', $this->companyId())->where('code', $row['branch_code'])->first();
-                $department = $branch ? Department::query()->where('company_id', $this->companyId())->where('branch_id', $branch->id)->where('code', $row['department_code'])->first() : null;
+                $companyId = $this->companyId();
+                $branch = Branch::query()->where('company_id', $companyId)->where('code', $row['branch_code'])->first();
+                $department = $branch ? Department::query()->where('company_id', $companyId)->where('branch_id', $branch->id)->where('code', $row['department_code'])->first() : null;
                 $data = [...$row, 'branch_id' => $branch?->id, 'department_id' => $department?->id, 'minimum_salary' => $row['minimum_salary'] ?: null, 'maximum_salary' => $row['maximum_salary'] ?: null, 'is_manager_position' => $bool($row['is_manager_position']), 'is_active' => $bool($row['is_active']), 'sort_order' => (int) ($row['sort_order'] ?: 0)];
                 $errors = $valid($data, ['code' => ['required', 'max:50'], 'title' => ['required', 'max:180'], 'minimum_salary' => ['nullable', 'numeric', 'min:0'], 'maximum_salary' => ['nullable', 'numeric', 'gte:minimum_salary']]);
                 if (! $branch) {
                     $errors[] = 'Branch code does not exist.';
-                } if (! $department) {
+                }
+                if (! $department) {
                     $errors[] = 'Department code does not exist in the selected branch.';
                 }
 
@@ -243,11 +283,14 @@ class BulkImportController extends Controller
                 $errors = $valid($data, ['employee_code' => ['required', 'max:50'], 'first_name' => ['required', 'max:255'], 'last_name' => ['required', 'max:255'], 'email' => ['nullable', 'email'], 'hire_date' => ['required', 'date'], 'base_salary' => ['nullable', 'numeric', 'min:0'], 'salary_currency' => ['in:USD,KHR'], 'employment_status' => ['required', 'in:Draft,Active,On probation,On leave,Suspended,Resigned,Terminated,Retired']]);
                 if (! $branch) {
                     $errors[] = 'Branch code does not exist.';
-                } if (! $department) {
+                }
+                if (! $department) {
                     $errors[] = 'Department code does not exist in the selected branch.';
-                } if (filled($row['position_code']) && ! $position) {
+                }
+                if (filled($row['position_code']) && ! $position) {
                     $errors[] = 'Position code does not exist in the selected department.';
-                } if (filled($row['employment_type_code']) && ! $employment) {
+                }
+                if (filled($row['employment_type_code']) && ! $employment) {
                     $errors[] = 'Employment type code does not exist.';
                 }
 
@@ -256,8 +299,28 @@ class BulkImportController extends Controller
         };
     }
 
+    /** @param array<string, mixed>|null $saved */
+    private function assertPreviewContext(Request $request, string $type, mixed $saved): void
+    {
+        $companyId = $this->currentCompanyId($request);
+        $valid = is_array($saved)
+            && ($saved['type'] ?? null) === $type
+            && (int) ($saved['user_id'] ?? 0) === (int) $request->user()->id
+            && (int) ($saved['company_id'] ?? 0) === $companyId
+            && is_array($saved['rows'] ?? null)
+            && is_numeric($saved['expires_at'] ?? null)
+            && (int) $saved['expires_at'] >= now()->timestamp;
+
+        abort_unless($valid, 419, 'Import preview has expired. Upload the file again.');
+    }
+
     private function companyId(): int
     {
-        return (int) Company::query()->value('id');
+        /** @var User|null $user */
+        $user = auth()->user();
+        $companyId = $user?->companyId();
+        abort_unless($companyId !== null, 403, 'Your account is not linked to a company context.');
+
+        return $companyId;
     }
 }
