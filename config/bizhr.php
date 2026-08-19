@@ -7,12 +7,13 @@ return [
     | Sensitive storage
     |--------------------------------------------------------------------------
     |
-    | Employee documents and generated exports contain sensitive HR data and
-    | must stay on private disks. Supported production choices are the private
-    | local disk and private S3-compatible object storage.
+    | Employee documents, candidate CVs, and generated exports contain
+    | sensitive HR data and must stay on private disks. Supported production
+    | choices are the private local disk and private S3-compatible storage.
     |
     */
     'documents_disk' => env('BIZHR_DOCUMENTS_DISK', env('FILESYSTEM_DISK', 'local')),
+    'recruitment_disk' => env('BIZHR_RECRUITMENT_DISK', env('BIZHR_DOCUMENTS_DISK', env('FILESYSTEM_DISK', 'local'))),
     'exports_disk' => env('BIZHR_EXPORTS_DISK', 'local'),
 
     'upload_security' => [
