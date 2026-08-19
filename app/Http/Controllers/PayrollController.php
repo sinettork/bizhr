@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attendance;
+use App\Models\Employee;
 use App\Models\PayrollItem;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollSetting;
@@ -145,9 +146,22 @@ class PayrollController extends Controller
 
     public function payslips(Request $request): View
     {
-        $employee = $request->user()->employee;
+        $companyId = $this->companyId();
+        $employee = Employee::query()
+            ->where('user_id', $request->user()->id)
+            ->where('company_id', $companyId)
+            ->first();
         abort_unless($employee !== null, 403, 'Your user account is not linked to an employee record.');
-        $items = PayrollItem::query()->with('period')->where('employee_id', $employee->id)->whereHas('period', fn ($q) => $q->whereIn('status', ['approved', 'paid', 'closed']))->latest('id')->paginate($this->perPage($request, 20))->withQueryString();
+
+        $items = PayrollItem::query()
+            ->with('period')
+            ->where('employee_id', $employee->id)
+            ->whereHas('period', fn ($query) => $query
+                ->where('company_id', $companyId)
+                ->whereIn('status', ['approved', 'paid', 'closed']))
+            ->latest('id')
+            ->paginate($this->perPage($request, 20))
+            ->withQueryString();
 
         return view('payroll.payslips.index', compact('items'));
     }
