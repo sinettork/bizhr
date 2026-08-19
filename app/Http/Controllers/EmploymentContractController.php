@@ -146,10 +146,12 @@ class EmploymentContractController extends Controller
 
     public function mine(Request $request): View
     {
-        $employee = $request->user()->employee;
-        abort_unless($employee !== null, 403);
         $companyId = $this->currentCompanyId($request);
-        abort_unless((int) $employee->company_id === $companyId, 403);
+        $employee = Employee::query()
+            ->where('company_id', $companyId)
+            ->where('user_id', $request->user()->id)
+            ->first();
+        abort_unless($employee !== null, 403);
         $contracts = EmploymentContract::query()
             ->where('company_id', $companyId)
             ->where('employee_id', $employee->id)
