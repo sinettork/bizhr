@@ -32,7 +32,7 @@ class LeaveRequestController extends Controller
             ->get();
 
         $requests = $employee->leaveRequests()
-            ->with(['leaveType', 'manager', 'hr'])
+            ->with(['leaveType', 'manager', 'hr', 'cancelledBy'])
             ->latest('start_date')
             ->latest('id')
             ->paginate($this->perPage($request, 20))->withQueryString();
@@ -122,6 +122,7 @@ class LeaveRequestController extends Controller
             'hr',
         ])->whereHas('employee', fn (Builder $employeeQuery) => $employeeQuery->where('company_id', $companyId));
 
+        $approvedRequests = collect();
         if ($user->hasRole('Manager')) {
             abort_unless($actor !== null, 403);
             $query->where('status', 'pending')
@@ -132,6 +133,15 @@ class LeaveRequestController extends Controller
         } else {
             abort_unless($user->hasAnyRole(['HR Administrator', 'Owner', 'Super Admin']), 403);
             $query->where('status', 'manager_approved');
+
+            $approvedRequests = LeaveRequest::query()
+                ->with(['employee.department', 'leaveType', 'hr'])
+                ->where('status', 'approved')
+                ->whereDate('start_date', '>', today())
+                ->whereHas('employee', fn (Builder $employees) => $employees->where('company_id', $companyId))
+                ->orderBy('start_date')
+                ->limit(10)
+                ->get();
         }
 
         $statisticsQuery = clone $query;
@@ -146,7 +156,7 @@ class LeaveRequestController extends Controller
             })->count(),
         ];
 
-        return view('leave.requests.review', compact('requests', 'statistics'));
+        return view('leave.requests.review', compact('requests', 'approvedRequests', 'statistics'));
     }
 
     public function approve(
@@ -187,5 +197,22 @@ class LeaveRequestController extends Controller
         $service->reject($leaveRequest, $request->user(), trim($validated['note']));
 
         return back()->with('status', 'បានបដិសេធសំណើឈប់សម្រាក។');
+    }
+
+    public function cancel(
+        LeaveRequest $leaveRequest,
+        Request $request,
+        LeaveApprovalService $service,
+    ): RedirectResponse {
+        abort_unless($request->user()?->can('leave.approve'), 403);
+        $companyId = $this->currentCompanyId($request);
+        abort_unless($leaveRequest->employee()->where('company_id', $companyId)->exists(), 404);
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:1000'],
+        ]);
+
+        $service->cancelApproved($leaveRequest, $request->user(), trim($validated['reason']));
+
+        return back()->with('status', 'Approved leave cancelled and the leave balance was restored.');
     }
 }
