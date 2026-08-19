@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\KpiTemplate;
+use App\Models\Position;
 use App\Models\User;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,24 @@ class KpiTemplateService
     public function save(array $templateData, array $items, User $actor, ?KpiTemplate $template = null): KpiTemplate
     {
         $this->validateItems($items);
+        $companyId = $actor->companyId();
+        if ($companyId === null) {
+            throw new DomainException('The actor does not have a company context.');
+        }
+        if (isset($templateData['company_id']) && (int) $templateData['company_id'] !== $companyId) {
+            throw new DomainException('The KPI template does not belong to the actor company.');
+        }
+        if ($template !== null && (int) $template->company_id !== $companyId) {
+            throw new DomainException('The KPI template does not belong to the actor company.');
+        }
+        if (! empty($templateData['position_id']) && ! Position::query()
+            ->whereKey($templateData['position_id'])
+            ->where('company_id', $companyId)
+            ->exists()) {
+            throw new DomainException('The selected position does not belong to the actor company.');
+        }
+
+        $templateData['company_id'] = $companyId;
 
         return DB::transaction(function () use ($templateData, $items, $actor, $template) {
             $template ??= new KpiTemplate;
@@ -48,7 +67,7 @@ class KpiTemplateService
         }
 
         $totalWeight = 0.0;
-        foreach ($items as $index => $item) {
+        foreach ($items as $item) {
             if (trim((string) ($item['name'] ?? '')) === '') {
                 throw new DomainException('Every KPI criterion requires a name.');
             }
