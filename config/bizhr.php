@@ -7,12 +7,13 @@ return [
     | Sensitive storage
     |--------------------------------------------------------------------------
     |
-    | Employee documents, candidate CVs, expense receipts, and generated
-    | exports contain sensitive HR data and must stay on private disks.
-    | Supported production choices are private local and private S3 storage.
+    | Employee documents, contracts, candidate CVs, expense receipts, and
+    | generated exports contain sensitive HR data and must stay on private
+    | disks. Supported production choices are private local and private S3.
     |
     */
     'documents_disk' => env('BIZHR_DOCUMENTS_DISK', env('FILESYSTEM_DISK', 'local')),
+    'contracts_disk' => env('BIZHR_CONTRACTS_DISK', env('BIZHR_DOCUMENTS_DISK', env('FILESYSTEM_DISK', 'local'))),
     'recruitment_disk' => env('BIZHR_RECRUITMENT_DISK', env('BIZHR_DOCUMENTS_DISK', env('FILESYSTEM_DISK', 'local'))),
     'expenses_disk' => env('BIZHR_EXPENSES_DISK', env('BIZHR_DOCUMENTS_DISK', env('FILESYSTEM_DISK', 'local'))),
     'exports_disk' => env('BIZHR_EXPORTS_DISK', 'local'),
