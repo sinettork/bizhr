@@ -90,9 +90,13 @@ class TaskController extends Controller
 
     public function progress(Request $request, Task $task, TaskWorkflowService $workflow): RedirectResponse
     {
-        $employee = $request->user()->employee;
+        $companyId = $this->currentCompanyId($request);
+        abort_unless($task->company_id === $companyId, 404);
+        $employee = Employee::query()
+            ->where('company_id', $companyId)
+            ->where('user_id', $request->user()->id)
+            ->first();
         abort_unless($employee !== null, 403);
-        abort_unless($task->company_id === $this->currentCompanyId($request), 404);
         abort_unless($task->assigned_to === $employee->id, 403);
         $data = $request->validate(['progress' => ['required', 'integer', 'between:0,100'], 'employee_note' => ['nullable', 'string', 'max:2000']]);
         $this->runWorkflow(fn () => $workflow->updateProgress($task, $request->user(), $data['progress'], $data['employee_note'] ?? null));
