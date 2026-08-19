@@ -4,7 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property bool $is_revoked
+ * @property Carbon|null $expires_at
+ */
 class UserSession extends Model
 {
     protected $fillable = [
@@ -44,9 +49,6 @@ class UserSession extends Model
         return $this->belongsTo(User::class, 'revoked_by');
     }
 
-    /**
-     * Revoke this session
-     */
     public function revoke(?int $revokedBy = null, ?string $reason = null): void
     {
         $this->update([
@@ -57,17 +59,11 @@ class UserSession extends Model
         ]);
     }
 
-    /**
-     * Check if session is expired
-     */
     public function isExpired(): bool
     {
-        return $this->expires_at && $this->expires_at->isPast();
+        return $this->expires_at?->isPast() ?? false;
     }
 
-    /**
-     * Check if session is active (not revoked and not expired)
-     */
     public function isActive(): bool
     {
         return ! $this->is_revoked && ! $this->isExpired();
