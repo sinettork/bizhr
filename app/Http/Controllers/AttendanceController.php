@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attendance;
+use App\Models\Employee;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -13,7 +14,7 @@ class AttendanceController extends Controller
     {
         $user = $request->user();
         $companyId = $this->currentCompanyId($request);
-        $employee = $user->employee;
+        $employee = Employee::query()->where('user_id', $user->id)->first();
         if ($employee !== null) {
             abort_unless((int) $employee->company_id === $companyId, 403);
         }
@@ -40,7 +41,7 @@ class AttendanceController extends Controller
         $summary = [
             'records' => $canManage ? $records->total() : ($today ? 1 : 0),
             'present' => $canManage ? (clone $summaryQuery)->whereIn('status', ['present', 'late', 'remote_work', 'business_trip'])->count() : ($today?->isPresent() ? 1 : 0),
-            'late' => $canManage ? (clone $summaryQuery)->where('late_minutes', '>', 0)->count() : (($today?->late_minutes ?? 0) > 0 ? 1 : 0),
+            'late' => $canManage ? (clone $summaryQuery)->where('late_minutes', '>', 0)->count() : (($today->late_minutes ?? 0) > 0 ? 1 : 0),
             'open' => $canManage ? (clone $summaryQuery)->whereNotNull('check_in_at')->whereNull('check_out_at')->count() : ($today?->check_in_at && ! $today->check_out_at ? 1 : 0),
         ];
 
