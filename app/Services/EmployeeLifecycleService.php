@@ -7,22 +7,19 @@ use App\Models\EmploymentHistory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class EmployeeLifecycleService
 {
-    /**
-     * Record an employment status change and create history entry
-     *
-     * @param  array<string, mixed>|null  $changes
-     */
+    /** @param array<string, mixed>|null $changes */
     public function recordStatusChange(
         Employee $employee,
         string $eventType,
         ?Carbon $effectiveDate = null,
         ?array $changes = null,
-        ?string $reason = null
+        ?string $reason = null,
     ): EmploymentHistory {
-        $effectiveDate ??= now()->toDateString();
+        $effectiveDate ??= now();
 
         $historyData = [
             'employee_id' => $employee->id,
@@ -31,11 +28,9 @@ class EmployeeLifecycleService
             'recorded_by' => Auth::id(),
         ];
 
-        // Capture current state if provided
         if ($changes) {
             $historyData = array_merge($historyData, $changes);
         } else {
-            // Otherwise capture current employee state
             $historyData = array_merge($historyData, [
                 'branch_id' => $employee->branch_id,
                 'department_id' => $employee->department_id,
@@ -49,86 +44,96 @@ class EmployeeLifecycleService
             $historyData['notes'] = $reason;
         }
 
-        return EmploymentHistory::create($historyData);
+        return EmploymentHistory::query()->create($historyData);
     }
 
-    /**
-     * Transition employee to a new status
-     */
     public function transitionStatus(
         Employee $employee,
         string $newStatus,
         ?Carbon $effectiveDate = null,
-        ?string $reason = null
+        ?string $reason = null,
     ): bool {
-        $validTransitions = $this->getValidTransitions($employee->employment_status);
-
-        if (! in_array($newStatus, $validTransitions, true)) {
+        $oldStatus = $employee->employment_status;
+        if (! in_array($newStatus, $this->getValidTransitions($oldStatus), true)) {
             return false;
         }
 
-        $employee->update(['employment_status' => $newStatus]);
+        DB::transaction(function () use ($employee, $oldStatus, $newStatus, $effectiveDate, $reason): void {
+            $employee->update([
+                'employment_status' => $newStatus,
+                'is_active' => ! in_array($newStatus, ['Resigned', 'Terminated', 'Retired'], true),
+            ]);
 
-        $this->recordStatusChange(
-            $employee,
-            match ($newStatus) {
-                'Draft' => 'hire',
-                'Active' => $employee->employment_status === 'On probation' ? 'probation_confirmation' : 'activation',
-                'On probation' => 'probation_confirmation',
-                'On leave' => 'leave_start',
-                'Suspended' => 'suspension',
-                'Resigned' => 'resignation',
-                'Terminated' => 'termination',
-                'Retired' => 'retirement',
+            $eventType = match (true) {
+                $oldStatus === 'On probation' && $newStatus === 'Active' => 'probation_confirmation',
+                $oldStatus === 'On leave' && $newStatus === 'Active' => 'leave_end',
+                $oldStatus === 'Suspended' && $newStatus === 'Active' => 'reinstatement',
+                $newStatus === 'On probation' => 'probation_start',
+                $newStatus === 'On leave' => 'leave_start',
+                $newStatus === 'Suspended' => 'suspension',
+                $newStatus === 'Resigned' => 'resignation',
+                $newStatus === 'Terminated' => 'termination',
+                $newStatus === 'Retired' => 'retirement',
+                $newStatus === 'Active' => 'activation',
                 default => 'status_change',
-            },
-            $effectiveDate,
-            ['base_salary' => $employee->base_salary, 'salary_currency' => $employee->salary_currency],
-            $reason
-        );
+            };
+
+            $this->recordStatusChange(
+                $employee,
+                $eventType,
+                $effectiveDate,
+                ['base_salary' => $employee->base_salary, 'salary_currency' => $employee->salary_currency],
+                $reason,
+            );
+        });
 
         return true;
     }
 
-    /**
-     * Record a salary change and create history entry
-     */
     public function recordSalaryChange(
         Employee $employee,
         float $newSalary,
         string $currency = 'USD',
         ?Carbon $effectiveDate = null,
-        ?string $reason = null
+        ?string $reason = null,
     ): EmploymentHistory {
         $oldSalary = $employee->base_salary;
+        $oldCurrency = $employee->salary_currency;
 
-        $employee->update([
-            'base_salary' => $newSalary,
-            'salary_currency' => $currency,
-        ]);
-
-        return $this->recordStatusChange(
-            $employee,
-            'salary_change',
-            $effectiveDate,
-            [
+        return DB::transaction(function () use ($employee, $oldSalary, $oldCurrency, $newSalary, $currency, $effectiveDate, $reason): EmploymentHistory {
+            $employee->update([
                 'base_salary' => $newSalary,
                 'salary_currency' => $currency,
-                'notes' => "Changed from {$oldSalary} {$employee->salary_currency} to {$newSalary} {$currency}. {$reason}",
-            ]
-        );
+            ]);
+
+            $note = "Changed from {$oldSalary} {$oldCurrency} to {$newSalary} {$currency}.";
+            if ($reason) {
+                $note .= ' '.trim($reason);
+            }
+
+            return $this->recordStatusChange(
+                $employee,
+                'salary_change',
+                $effectiveDate,
+                [
+                    'branch_id' => $employee->branch_id,
+                    'department_id' => $employee->department_id,
+                    'position_id' => $employee->position_id,
+                    'base_salary' => $newSalary,
+                    'salary_currency' => $currency,
+                ],
+                $note,
+            );
+        });
     }
 
-    /**
-     * Record a transfer (branch/department/position change)
-     */
     public function recordTransfer(
         Employee $employee,
         ?int $branchId = null,
         ?int $departmentId = null,
         ?int $positionId = null,
         ?Carbon $effectiveDate = null,
-        ?string $reason = null
+        ?string $reason = null,
     ): EmploymentHistory {
         $changes = [
             'branch_id' => $branchId ?? $employee->branch_id,
@@ -138,57 +143,43 @@ class EmployeeLifecycleService
             'salary_currency' => $employee->salary_currency,
         ];
 
-        $employee->update($changes);
+        return DB::transaction(function () use ($employee, $changes, $effectiveDate, $reason): EmploymentHistory {
+            $employee->update($changes);
 
-        return $this->recordStatusChange(
-            $employee,
-            'transfer',
-            $effectiveDate,
-            $changes,
-            $reason
-        );
+            return $this->recordStatusChange($employee, 'transfer', $effectiveDate, $changes, $reason);
+        });
     }
 
-    /**
-     * Record a promotion (with optional salary increase)
-     */
     public function recordPromotion(
         Employee $employee,
         int $newPositionId,
         ?float $newSalary = null,
         ?Carbon $effectiveDate = null,
-        ?string $reason = null
+        ?string $reason = null,
     ): EmploymentHistory {
+        $oldSalary = $employee->base_salary;
         $changes = [
             'position_id' => $newPositionId,
-            'base_salary' => $newSalary ?? $employee->base_salary,
+            'base_salary' => $newSalary ?? $oldSalary,
             'salary_currency' => $employee->salary_currency,
         ];
 
-        $employee->update($changes);
+        return DB::transaction(function () use ($employee, $changes, $oldSalary, $newPositionId, $newSalary, $effectiveDate, $reason): EmploymentHistory {
+            $employee->update($changes);
 
-        $noteText = "Promoted to position {$newPositionId}";
-        if ($newSalary !== null && $newSalary !== $employee->base_salary) {
-            $noteText .= " with salary increase to {$newSalary}";
-        }
-        if ($reason) {
-            $noteText .= ". {$reason}";
-        }
+            $noteText = "Promoted to position {$newPositionId}";
+            if ($newSalary !== null && (float) $newSalary !== (float) $oldSalary) {
+                $noteText .= " with salary change from {$oldSalary} to {$newSalary}";
+            }
+            if ($reason) {
+                $noteText .= '. '.trim($reason);
+            }
 
-        return $this->recordStatusChange(
-            $employee,
-            'promotion',
-            $effectiveDate,
-            $changes,
-            $noteText
-        );
+            return $this->recordStatusChange($employee, 'promotion', $effectiveDate, $changes, $noteText);
+        });
     }
 
-    /**
-     * Get valid transitions from current status
-     *
-     * @return list<string>
-     */
+    /** @return list<string> */
     public function getValidTransitions(string $currentStatus): array
     {
         return match ($currentStatus) {
@@ -197,18 +188,12 @@ class EmployeeLifecycleService
             'Active' => ['On leave', 'Suspended', 'Resigned', 'Terminated', 'Retired'],
             'On leave' => ['Active', 'Suspended', 'Resigned', 'Terminated'],
             'Suspended' => ['Active', 'Resigned', 'Terminated'],
-            'Resigned' => [],
-            'Terminated' => [],
-            'Retired' => [],
+            'Resigned', 'Terminated', 'Retired' => [],
             default => [],
         };
     }
 
-    /**
-     * Get employment history for an employee
-     *
-     * @return HasMany<EmploymentHistory, Employee>
-     */
+    /** @return HasMany<EmploymentHistory, Employee> */
     public function getEmploymentHistory(Employee $employee): HasMany
     {
         return $employee->employmentHistories()
@@ -216,75 +201,83 @@ class EmployeeLifecycleService
             ->orderByDesc('created_at');
     }
 
-    /**
-     * Check if employee can be reinstated
-     */
     public function canReinstate(Employee $employee): bool
     {
         return in_array($employee->employment_status, ['Resigned', 'Terminated'], true)
-            && $employee->trashed() === false;
+            && ! $employee->trashed();
     }
 
-    /**
-     * Reinstate an employee
-     */
     public function reinstate(
         Employee $employee,
-        string $newStatus = 'active',
+        string $newStatus = 'Active',
         ?Carbon $effectiveDate = null,
-        ?string $reason = null
+        ?string $reason = null,
     ): bool {
-        if (! $this->canReinstate($employee)) {
+        if (! $this->canReinstate($employee) || ! in_array($newStatus, ['Active', 'On probation'], true)) {
             return false;
         }
 
-        $this->transitionStatus($employee, $newStatus, $effectiveDate, "Reinstatement: {$reason}");
+        DB::transaction(function () use ($employee, $newStatus, $effectiveDate, $reason): void {
+            $employee->update([
+                'employment_status' => $newStatus,
+                'is_active' => true,
+            ]);
+
+            if ($employee->user_id) {
+                DB::table('users')->where('id', $employee->user_id)->update(['is_active' => true, 'updated_at' => now()]);
+            }
+
+            $this->recordStatusChange(
+                $employee,
+                'reinstatement',
+                $effectiveDate,
+                ['base_salary' => $employee->base_salary, 'salary_currency' => $employee->salary_currency],
+                $reason ? 'Reinstatement: '.trim($reason) : 'Employee reinstated.',
+            );
+        });
 
         return true;
     }
 
-    /**
-     * Begin separation (mark for separation, not immediate)
-     */
     public function initiateSeparation(
         Employee $employee,
-        string $type = 'resignation', // resignation|termination|retirement
+        string $type = 'resignation',
         ?Carbon $effectiveDate = null,
-        ?string $reason = null
+        ?string $reason = null,
     ): bool {
-        $validTypes = ['resignation', 'termination', 'retirement'];
+        $newStatus = match ($type) {
+            'resignation' => 'Resigned',
+            'termination' => 'Terminated',
+            'retirement' => 'Retired',
+            default => null,
+        };
 
-        if (! in_array($type, $validTypes, true)) {
+        if ($newStatus === null) {
             return false;
         }
 
         return $this->transitionStatus(
             $employee,
-            match ($type) {
-                'resignation' => 'Resigned',
-                'termination' => 'Terminated',
-                'retirement' => 'Retired',
-            },
+            $newStatus,
             $effectiveDate,
-            $reason ?? "Employee initiated {$type}"
+            $reason ?? "Employee initiated {$type}",
         );
     }
 
-    /**
-     * Complete separation (soft delete and deactivate)
-     */
     public function completeSeparation(Employee $employee): bool
     {
         if (! in_array($employee->employment_status, ['Resigned', 'Terminated', 'Retired'], true)) {
             return false;
         }
 
-        $employee->delete(); // Soft delete
+        DB::transaction(function () use ($employee): void {
+            if ($employee->user_id) {
+                DB::table('users')->where('id', $employee->user_id)->update(['is_active' => false, 'updated_at' => now()]);
+                DB::table('sessions')->where('user_id', $employee->user_id)->delete();
+            }
 
-        // Optionally deactivate user account
-        if ($employee->user) {
-            $employee->user->update(['is_active' => false]);
-        }
+            $employee->delete();
+        });
 
         return true;
     }
