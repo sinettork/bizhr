@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Services\LeaveApprovalService;
@@ -10,6 +9,7 @@ use App\Services\LeaveRequestService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class LeaveRequestController extends Controller
@@ -19,9 +19,11 @@ class LeaveRequestController extends Controller
         abort_unless($request->user()->can('leave.request'), 403);
         $employee = $request->user()->employee;
         abort_unless($employee !== null, 403);
+        $companyId = $this->currentCompanyId($request);
+        abort_unless((int) $employee->company_id === $companyId, 403);
 
         $types = LeaveType::query()
-            ->where('company_id', $employee->company_id)
+            ->where('company_id', $companyId)
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
@@ -53,9 +55,11 @@ class LeaveRequestController extends Controller
         abort_unless($request->user()->can('leave.request'), 403);
         $employee = $request->user()->employee;
         abort_unless($employee !== null, 403);
+        $companyId = $this->currentCompanyId($request);
+        abort_unless((int) $employee->company_id === $companyId, 403);
 
         $data = $request->validate([
-            'leave_type_id' => ['required', 'integer', 'exists:leave_types,id'],
+            'leave_type_id' => ['required', 'integer', Rule::exists('leave_types', 'id')->where('company_id', $companyId)],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'reason' => ['nullable', 'string', 'max:2000'],
@@ -63,7 +67,7 @@ class LeaveRequestController extends Controller
 
         $type = LeaveType::query()
             ->whereKey($data['leave_type_id'])
-            ->where('company_id', $employee->company_id)
+            ->where('company_id', $companyId)
             ->where('is_active', true)
             ->firstOrFail();
 
@@ -82,6 +86,7 @@ class LeaveRequestController extends Controller
     {
         abort_unless($request->user()?->can('leave.approve'), 403);
         $user = $request->user();
+        $companyId = $this->currentCompanyId($request);
         $actor = $user->employee;
 
         $query = LeaveRequest::query()->with([
@@ -91,34 +96,23 @@ class LeaveRequestController extends Controller
             'leaveType',
             'manager',
             'hr',
-        ]);
+        ])->whereHas('employee', fn (Builder $employeeQuery) => $employeeQuery->where('company_id', $companyId));
 
         if ($user->hasRole('Manager')) {
-            abort_unless($actor !== null, 403);
+            abort_unless($actor !== null && (int) $actor->company_id === $companyId, 403);
             $query->where('status', 'pending')
                 ->whereHas('employee', fn (Builder $employeeQuery) => $employeeQuery
-                    ->where('company_id', $actor->company_id)
+                    ->where('company_id', $companyId)
                     ->where('department_id', $actor->department_id)
                     ->where('id', '!=', $actor->id));
         } else {
-            abort_unless($user->hasAnyRole([
-                'HR Administrator',
-                'Owner',
-                'Super Admin',
-            ]), 403);
-
+            abort_unless($user->hasAnyRole(['HR Administrator', 'Owner', 'Super Admin']), 403);
             $query->where('status', 'manager_approved');
-
-            if ($actor) {
-                $query->whereHas('employee', fn (Builder $employeeQuery) => $employeeQuery
-                    ->where('company_id', $actor->company_id));
-            }
         }
 
         $statisticsQuery = clone $query;
         $requests = $query->latest('start_date')->latest('id')->paginate($this->perPage($request, 20))->withQueryString();
 
-        $companyId = $actor->company_id ?? (int) Company::query()->value('id');
         $companyRequests = LeaveRequest::query()->whereHas('employee', fn (Builder $employees) => $employees->where('company_id', $companyId));
         $statistics = [
             'pending_review' => $statisticsQuery->count(),
@@ -137,6 +131,8 @@ class LeaveRequestController extends Controller
         LeaveApprovalService $service,
     ): RedirectResponse {
         abort_unless($request->user()?->can('leave.approve'), 403);
+        $companyId = $this->currentCompanyId($request);
+        abort_unless($leaveRequest->employee()->where('company_id', $companyId)->exists(), 404);
         $validated = $request->validate(['note' => ['nullable', 'string', 'max:1000']]);
 
         $result = $service->approve(
@@ -158,6 +154,8 @@ class LeaveRequestController extends Controller
         LeaveApprovalService $service,
     ): RedirectResponse {
         abort_unless($request->user()?->can('leave.approve'), 403);
+        $companyId = $this->currentCompanyId($request);
+        abort_unless($leaveRequest->employee()->where('company_id', $companyId)->exists(), 404);
         $validated = $request->validate([
             'note' => ['required', 'string', 'min:3', 'max:1000'],
         ]);
