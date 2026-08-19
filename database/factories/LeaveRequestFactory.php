@@ -28,7 +28,7 @@ class LeaveRequestFactory extends Factory
             'end_date' => $endDate,
             'total_days' => $this->faker->numberBetween(1, 10),
             'reason' => $this->faker->sentence(),
-            'status' => $this->faker->randomElement(['pending', 'manager_reviewed', 'hr_reviewed', 'approved', 'rejected']),
+            'status' => $this->faker->randomElement(['pending', 'manager_approved', 'approved', 'rejected', 'withdrawn', 'cancelled']),
             'manager_reviewed_at' => $this->faker->optional()->dateTime(),
             'hr_reviewed_at' => $this->faker->optional()->dateTime(),
         ];
