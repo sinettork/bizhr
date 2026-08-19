@@ -57,13 +57,10 @@ it('generates a public UUID and uses it in employee URLs', function () {
         ->toBe('/employees/'.$employee->public_id);
 });
 
-it('keeps numeric route binding available during the UUID rollout', function () {
+it('rejects numeric internal ids for public route binding', function () {
     $employee = publicIdentifierEmployee();
 
-    $resolved = (new Employee)->resolveRouteBinding($employee->id);
-
-    expect($resolved)->not->toBeNull()
-        ->and($resolved?->is($employee))->toBeTrue();
+    expect((new Employee)->resolveRouteBinding((string) $employee->id))->toBeNull();
 });
 
 it('uses public UUID route keys for every externally linked record', function (string $model) {
