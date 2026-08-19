@@ -75,7 +75,9 @@ class RecruitmentController extends Controller
         $disk = $this->recruitmentDisk();
         $vacancy->applicants()->create([
             ...array_diff_key($data, ['cv' => true]),
-            'cv_path' => $file instanceof UploadedFile ? $file->store("recruitment/{$vacancy->id}", $disk) : null,
+            'cv_path' => $file instanceof UploadedFile
+                ? $file->store("companies/{$vacancy->company_id}/recruitment/vacancies/{$vacancy->id}/cvs", $disk)
+                : null,
             'cv_original_name' => $file instanceof UploadedFile ? $file->getClientOriginalName() : null,
             'status' => 'applied',
             'applied_at' => now(),
@@ -86,7 +88,7 @@ class RecruitmentController extends Controller
 
     public function transition(Request $request, JobApplicant $applicant, RecruitmentWorkflowService $workflow): RedirectResponse
     {
-        $this->ensureCompany($applicant->vacancy, $request);
+        $vacancy = $this->vacancyForApplicant($applicant, $request);
         Gate::forUser($request->user())->authorize('manage', $applicant);
         $data = $request->validate(['status' => ['required', 'string'], 'note' => ['nullable', 'string', 'max:2000']]);
         try {
@@ -95,12 +97,14 @@ class RecruitmentController extends Controller
             throw ValidationException::withMessages(['status' => $exception->getMessage()]);
         }
 
+        unset($vacancy);
+
         return back()->with('status', 'Candidate stage updated.');
     }
 
     public function downloadCv(Request $request, JobApplicant $applicant): StreamedResponse
     {
-        $this->ensureCompany($applicant->vacancy, $request);
+        $this->vacancyForApplicant($applicant, $request);
         Gate::forUser($request->user())->authorize('view', $applicant);
         $disk = $this->recruitmentDisk();
         abort_unless($applicant->cv_path && Storage::disk($disk)->exists($applicant->cv_path), 404);
@@ -110,7 +114,15 @@ class RecruitmentController extends Controller
 
     private function ensureCompany(JobVacancy $vacancy, Request $request): void
     {
-        abort_unless($vacancy->company_id === $this->currentCompanyId($request), 404);
+        abort_unless((int) $vacancy->company_id === $this->currentCompanyId($request), 404);
+    }
+
+    private function vacancyForApplicant(JobApplicant $applicant, Request $request): JobVacancy
+    {
+        $vacancy = JobVacancy::query()->whereKey($applicant->job_vacancy_id)->firstOrFail();
+        $this->ensureCompany($vacancy, $request);
+
+        return $vacancy;
     }
 
     private function recruitmentDisk(): string
