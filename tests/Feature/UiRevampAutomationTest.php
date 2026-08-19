@@ -59,6 +59,9 @@ it('verifies that all domain pages render with core BizHR UI design DNA', functi
                 "Admin page '{$routeName}' does not contain expected UI element: '{$expectedElement}'",
             );
         }
+
+        $response->assertSee('appConfirmationDialog', false)
+            ->assertSee('js/confirmation-dialog.js', false);
     }
 
     foreach ($employeePages as $routeName => $expectedElements) {
@@ -76,5 +79,8 @@ it('verifies that all domain pages render with core BizHR UI design DNA', functi
                 "Employee page '{$routeName}' does not contain expected UI element: '{$expectedElement}'",
             );
         }
+
+        $response->assertSee('appConfirmationDialog', false)
+            ->assertSee('js/confirmation-dialog.js', false);
     }
 });
