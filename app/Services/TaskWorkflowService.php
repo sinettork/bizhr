@@ -11,6 +11,7 @@ class TaskWorkflowService
 {
     public function updateProgress(Task $task, User $actor, int $progress, ?string $note): Task
     {
+        $this->assertSameCompany($task, $actor);
         if ($progress < 0 || $progress > 100) {
             throw new DomainException('Progress must be between 0 and 100.');
         }
@@ -35,6 +36,7 @@ class TaskWorkflowService
     {
         return DB::transaction(function () use ($task, $actor, $approved, $note) {
             $task = Task::query()->lockForUpdate()->findOrFail($task->id);
+            $this->assertSameCompany($task, $actor);
             if ($task->status !== 'waiting_verification') {
                 throw new DomainException('Only a submitted task can be verified.');
             }
@@ -57,6 +59,7 @@ class TaskWorkflowService
 
     public function cancel(Task $task, User $actor, string $reason): Task
     {
+        $this->assertSameCompany($task, $actor);
         if (in_array($task->status, ['verified', 'cancelled'], true)) {
             throw new DomainException('This task cannot be cancelled.');
         }
@@ -69,5 +72,12 @@ class TaskWorkflowService
         ]);
 
         return $task->refresh();
+    }
+
+    private function assertSameCompany(Task $task, User $actor): void
+    {
+        if ($actor->companyId() !== (int) $task->company_id) {
+            throw new DomainException('The task does not belong to the actor company.');
+        }
     }
 }
