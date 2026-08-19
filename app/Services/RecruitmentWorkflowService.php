@@ -70,7 +70,7 @@ class RecruitmentWorkflowService
                 throw new DomainException('This offer is unavailable or expired.');
             }
 
-            $applicant = JobApplicant::query()->lockForUpdate()->findOrFail($offer->job_applicant_id);
+            $applicant = JobApplicant::query()->lockForUpdate()->findOrFail($offer->applicant_id);
             $offer->update(['status' => $accepted ? 'accepted' : 'declined', 'responded_at' => now()]);
             $applicant->update(['status' => $accepted ? 'accepted' : 'declined']);
 
@@ -81,7 +81,7 @@ class RecruitmentWorkflowService
     private function assertOfferCompany(JobOffer $offer, User $actor): void
     {
         $companyId = JobVacancy::query()
-            ->whereIn('id', JobApplicant::query()->whereKey($offer->job_applicant_id)->select('job_vacancy_id'))
+            ->whereIn('id', JobApplicant::query()->whereKey($offer->applicant_id)->select('job_vacancy_id'))
             ->value('company_id');
 
         if ($companyId === null || $actor->companyId() !== (int) $companyId) {
