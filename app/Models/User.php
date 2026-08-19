@@ -96,6 +96,19 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     {
         $employee = $this->employee()->first();
 
-        return $employee !== null ? $employee->company_id : Company::query()->value('id');
+        if ($employee !== null) {
+            return (int) $employee->company_id;
+        }
+
+        // Preserve bootstrap access for an unlinked Super Admin only in a
+        // single-company installation. Never silently select the first tenant
+        // when multiple companies exist.
+        if ($this->hasRole('Super Admin')) {
+            $companyIds = Company::query()->orderBy('id')->limit(2)->pluck('id');
+
+            return $companyIds->count() === 1 ? (int) $companyIds->first() : null;
+        }
+
+        return null;
     }
 }
