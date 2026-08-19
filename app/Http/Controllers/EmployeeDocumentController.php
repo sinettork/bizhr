@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeDocumentController extends Controller
@@ -45,7 +46,7 @@ class EmployeeDocumentController extends Controller
         $file = $request->file('document');
         abort_unless($file !== null, 422);
         $fileSecurity->assertSafe($file, 'document');
-        $path = $file->store('employee-documents/'.$employee->id, 'local');
+        $path = $file->store('employee-documents/'.$employee->id, $this->documentsDisk());
 
         $employee->documents()->create([
             ...array_diff_key($data, ['document' => true]),
@@ -62,14 +63,15 @@ class EmployeeDocumentController extends Controller
         $this->authorizeEmployee($employee);
         abort_unless($document->employee_id === $employee->id, 404);
         Gate::authorize('view', $document);
-        abort_unless(Storage::disk('local')->exists($document->file_path), 404);
+        $disk = $this->documentsDisk();
+        abort_unless(Storage::disk($disk)->exists($document->file_path), 404);
         AuditLog::record($document, 'downloaded', [], [
             'employee_id' => $employee->id,
             'document_type' => $document->document_type,
             'original_name' => $document->original_name,
         ]);
 
-        return Storage::disk('local')->download($document->file_path, $document->original_name);
+        return Storage::disk($disk)->download($document->file_path, $document->original_name);
     }
 
     public function destroy(Employee $employee, EmployeeDocument $document): RedirectResponse
@@ -81,7 +83,7 @@ class EmployeeDocumentController extends Controller
         if ($document->status !== 'pending_verification') {
             return back()->withErrors(['document' => 'Verified document history must be revoked instead of deleted.']);
         }
-        Storage::disk('local')->delete($document->file_path);
+        Storage::disk($this->documentsDisk())->delete($document->file_path);
         $document->delete();
 
         return back()->with('status', 'បានលុបឯកសារដោយជោគជ័យ។');
@@ -142,5 +144,16 @@ class EmployeeDocumentController extends Controller
         }
 
         abort_unless($user->can('employee.view-sensitive'), 403);
+    }
+
+    private function documentsDisk(): string
+    {
+        $disk = (string) config('bizhr.documents_disk', 'local');
+
+        if (! in_array($disk, ['local', 's3'], true)) {
+            throw new RuntimeException('BizHR employee documents require a private local or S3 disk.');
+        }
+
+        return $disk;
     }
 }
