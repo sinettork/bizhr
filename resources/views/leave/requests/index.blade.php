@@ -15,6 +15,60 @@
         <div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
     @endif
 
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-xl-3">
+            <section class="profile-card h-100 mb-0"><div class="profile-card-body">
+                <div class="small text-body-secondary">Remaining leave</div>
+                <div class="fs-4 fw-bold text-dark mt-1">{{ number_format($statistics['remaining'], 1) }}</div>
+                <div class="small text-body-secondary mt-2">Days available this year</div>
+            </div></section>
+        </div>
+        <div class="col-6 col-xl-3">
+            <section class="profile-card h-100 mb-0"><div class="profile-card-body">
+                <div class="small text-body-secondary">Waiting approval</div>
+                <div class="fs-4 fw-bold text-dark mt-1">{{ number_format($statistics['pending']) }}</div>
+                <div class="small text-body-secondary mt-2">Pending requests</div>
+            </div></section>
+        </div>
+        <div class="col-6 col-xl-3">
+            <section class="profile-card h-100 mb-0"><div class="profile-card-body">
+                <div class="small text-body-secondary">Approved</div>
+                <div class="fs-4 fw-bold text-dark mt-1">{{ number_format($statistics['approved']) }}</div>
+                <div class="small text-body-secondary mt-2">Approved requests</div>
+            </div></section>
+        </div>
+        <div class="col-6 col-xl-3">
+            <section class="profile-card h-100 mb-0"><div class="profile-card-body">
+                <div class="small text-body-secondary">All requests</div>
+                <div class="fs-4 fw-bold text-dark mt-1">{{ number_format($statistics['total']) }}</div>
+                <div class="small text-body-secondary mt-2">Request history</div>
+            </div></section>
+        </div>
+    </div>
+
+    @if($balances->isNotEmpty())
+        <section class="profile-card mb-3">
+            <div class="profile-card-header">
+                <h2 class="profile-card-title"><i class="fa-solid fa-chart-pie text-primary"></i><span>{{ now()->year }} leave balances</span></h2>
+            </div>
+            <div class="profile-card-body">
+                <div class="row g-2">
+                    @foreach($balances as $balance)
+                        <div class="col-12 col-md-6 col-xl-4">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="d-flex align-items-center justify-content-between gap-2">
+                                    <span class="fw-semibold text-dark">{{ $balance->leaveType?->name ?? 'Leave' }}</span>
+                                    <span class="badge text-bg-light border text-dark">{{ number_format((float) $balance->remaining_days, 1) }} days left</span>
+                                </div>
+                                <div class="small text-body-secondary mt-2">Used {{ number_format((float) $balance->used_days, 1) }} of {{ number_format((float) $balance->allocated_days, 1) }} days</div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </section>
+    @endif
+
     <div class="reference-list" data-list-container>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -36,8 +90,9 @@
                                 'approved' => ['bg-success', 'Approved'],
                                 'rejected' => ['bg-danger', 'Rejected'],
                                 'withdrawn' => ['bg-secondary', 'Withdrawn'],
+                                'cancelled' => ['bg-secondary', 'Cancelled'],
                                 'manager_approved' => ['bg-primary', 'Awaiting HR'],
-                                default => ['bg-warning', 'Pending'],
+                                default => ['bg-warning', 'Pending manager'],
                             };
                             $canWithdraw = in_array($leaveRequest->status, ['pending', 'manager_approved'], true);
                         @endphp
@@ -76,8 +131,8 @@
                         </tr>
                     @empty
                         <tr>
-                            <td class="text-center text-body-secondary py-5" colspan="7">
-                                <i class="fa-solid fa-calendar-xmark fa-xl d-block mb-3 text-primary"></i>You haven't requested any time off yet.
+                            <td colspan="7" class="p-0">
+                                <x-empty-state class="py-5 px-3" icon="fa-calendar-xmark" title="No leave requests yet" message="Your leave request history will appear here after you submit your first request." />
                             </td>
                         </tr>
                     @endforelse
@@ -96,6 +151,10 @@
                     <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="alert alert-light border d-flex gap-2 align-items-start small">
+                        <i class="fa-solid fa-circle-info text-primary mt-1"></i>
+                        <span>Select the leave type and dates. BizHR will calculate working days and validate the request against your available balance and existing leave.</span>
+                    </div>
                     <div class="row g-3">
                         <div class="col-md-4">
                             <label class="form-label">Leave type <span class="text-danger">*</span></label>
