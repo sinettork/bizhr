@@ -1,11 +1,29 @@
-<x-layouts::app title="Review Leave Requests">
-    <x-workspace-command-bar title="Leave Approval Queue" icon="fa-list-check" context="HR & Approvals">
+@php
+    $isManagerStage = $reviewStage === 'manager';
+    $queueTitle = $isManagerStage ? 'Manager Leave Review' : 'Final HR Leave Approval';
+    $queueContext = $isManagerStage ? 'Team Approvals' : 'HR & Approvals';
+    $queueIntro = $isManagerStage
+        ? 'Review requests from employees in your department. Approving sends the request to HR for final approval.'
+        : 'These requests already passed manager review. Approving here is the final leave decision and updates leave balances.';
+    $stageLabel = $isManagerStage ? 'Manager review' : 'Awaiting final HR approval';
+@endphp
+
+<x-layouts::app title="{{ $queueTitle }}">
+    <x-workspace-command-bar :title="$queueTitle" icon="fa-list-check" :context="$queueContext">
         <x-slot:actions>
             <span class="status-text text-bg-warning">
                 <i class="fa-solid fa-clock me-1"></i>{{ number_format($statistics['pending_review']) }} waiting review
             </span>
         </x-slot:actions>
     </x-workspace-command-bar>
+
+    <div class="alert alert-light border d-flex align-items-start gap-2 mb-3">
+        <i class="fa-solid {{ $isManagerStage ? 'fa-people-roof' : 'fa-user-shield' }} text-primary mt-1"></i>
+        <div>
+            <div class="fw-semibold text-dark">{{ $stageLabel }}</div>
+            <div class="small text-body-secondary">{{ $queueIntro }}</div>
+        </div>
+    </div>
 
     @if (session('status'))
         <div class="alert alert-success d-flex align-items-center gap-2"><i class="fa-solid fa-circle-check"></i><span>{{ session('status') }}</span></div>
@@ -14,12 +32,36 @@
         <div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
     @endif
 
+    <div class="row g-2 mb-3">
+        <div class="col-12 col-sm-4">
+            <section class="profile-card h-100 mb-0"><div class="profile-card-body py-3">
+                <div class="small text-body-secondary">Waiting for you</div>
+                <div class="fs-4 fw-bold text-dark mt-1">{{ number_format($statistics['pending_review']) }}</div>
+                <div class="small text-body-secondary mt-1">{{ $isManagerStage ? 'Department requests' : 'Manager-approved requests' }}</div>
+            </div></section>
+        </div>
+        <div class="col-6 col-sm-4">
+            <section class="profile-card h-100 mb-0"><div class="profile-card-body py-3">
+                <div class="small text-body-secondary">Final approvals today</div>
+                <div class="fs-4 fw-bold text-success mt-1">{{ number_format($statistics['approved_today']) }}</div>
+                <div class="small text-body-secondary mt-1">Company-wide</div>
+            </div></section>
+        </div>
+        <div class="col-6 col-sm-4">
+            <section class="profile-card h-100 mb-0"><div class="profile-card-body py-3">
+                <div class="small text-body-secondary">Rejected today</div>
+                <div class="fs-4 fw-bold text-danger mt-1">{{ number_format($statistics['rejected_today']) }}</div>
+                <div class="small text-body-secondary mt-1">Company-wide</div>
+            </div></section>
+        </div>
+    </div>
+
     <div class="reference-list" data-list-container>
         @if($requests->count())
             <div class="p-3 border-bottom bg-body-tertiary d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div>
-                    <div class="fw-semibold text-dark">Requests needing a decision</div>
-                    <div class="small text-body-secondary">Review the employee, leave period and reason before approving or rejecting.</div>
+                    <div class="fw-semibold text-dark">Requests needing your decision</div>
+                    <div class="small text-body-secondary">Review the employee, dates and reason before deciding.</div>
                 </div>
                 <span class="small text-body-secondary">Oldest requests first</span>
             </div>
@@ -38,7 +80,7 @@
                                         <div class="min-w-0">
                                             <div class="d-flex flex-wrap align-items-center gap-2">
                                                 <h2 class="h6 mb-0 text-dark">{{ $empName }}</h2>
-                                                <span class="status-text text-bg-warning">Pending</span>
+                                                <span class="status-text text-bg-{{ $isManagerStage ? 'warning' : 'primary' }}">{{ $stageLabel }}</span>
                                             </div>
                                             <div class="small text-body-secondary mt-1">{{ $leaveRequest->employee?->employee_code }}</div>
                                             <div class="small text-body-secondary">{{ $leaveRequest->employee?->department?->name ?? 'No department' }}</div>
@@ -63,7 +105,7 @@
                                         class="justify-content-lg-end flex-lg-column"
                                         :approve-url="route('leave.requests.approve', $leaveRequest)"
                                         reject-target="#rejectModal{{ $leaveRequest->id }}"
-                                        :approve-fields="['note' => 'Approved']"
+                                        :approve-fields="['note' => $isManagerStage ? 'Manager approved' : 'Final HR approved']"
                                     />
                                 </div>
                             </div>
@@ -71,6 +113,9 @@
                             <div class="mt-3 pt-3 border-top">
                                 <div class="text-body-secondary small mb-1">Employee reason</div>
                                 <div class="small text-dark">{{ $leaveRequest->reason ?: 'No reason provided.' }}</div>
+                                @if(! $isManagerStage && $leaveRequest->manager)
+                                    <div class="small text-body-secondary mt-2"><i class="fa-solid fa-circle-check text-success me-1"></i>Manager review completed by {{ $leaveRequest->manager->name }}</div>
+                                @endif
                             </div>
                         </div>
                     </article>
@@ -83,7 +128,7 @@
                 icon="fa-circle-check"
                 tone="success"
                 title="Approval queue is clear"
-                message="All leave requests have been reviewed. New requests will appear here when they need a decision."
+                :message="$isManagerStage ? 'No department leave requests are waiting for manager review.' : 'No manager-approved requests are waiting for final HR review.'"
             />
         @endif
     </div>
