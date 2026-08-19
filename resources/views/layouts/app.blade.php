@@ -4,6 +4,7 @@
 <body class="app-body" hx-history="false">
     @include('partials.navigation')
     <main class="app-workspace px-3 px-lg-4 pt-3 pb-4">{{ $slot }}</main>
+    <x-confirmation-dialog />
     <script nonce="{{ request()->attributes->get('csp_nonce') }}">window.appTablePreferences = @json(auth()->user()?->table_preferences ?? []); window.tablePreferenceUrl = @json(route('preferences.table-columns.update'));</script>
     <script src="{{ asset('vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ asset('vendor/htmx/htmx.min.js') }}"></script>
