@@ -13,11 +13,15 @@ class PerformanceReviewService
 {
     public function create(Employee $employee, User $reviewer, string $start, string $end): PerformanceReview
     {
-        if ($reviewer->employee?->id === $employee->id && ! $reviewer->hasRole('Super Admin')) {
+        if ($reviewer->companyId() !== (int) $employee->company_id) {
+            throw new DomainException('The reviewer and employee must belong to the same company.');
+        }
+        if ($this->employeeIdForUser($reviewer) === $employee->id && ! $reviewer->hasRole('Super Admin')) {
             throw new DomainException('A reviewer cannot create their own performance review.');
         }
 
         $goals = EmployeeGoal::query()
+            ->where('company_id', $employee->company_id)
             ->where('employee_id', $employee->id)
             ->whereIn('status', ['active', 'completed'])
             ->whereDate('start_date', '<=', $end)
@@ -32,7 +36,7 @@ class PerformanceReviewService
         }
 
         return DB::transaction(function () use ($employee, $reviewer, $start, $end, $goals) {
-            $exists = PerformanceReview::query()->where('employee_id', $employee->id)
+            $exists = PerformanceReview::query()->where('company_id', $employee->company_id)->where('employee_id', $employee->id)
                 ->whereDate('period_start', $start)->whereDate('period_end', $end)
                 ->whereNotIn('status', ['cancelled'])->exists();
             if ($exists) {
@@ -71,6 +75,7 @@ class PerformanceReviewService
     {
         return DB::transaction(function () use ($review, $actor, $scores, $comments, $summary) {
             $review = PerformanceReview::query()->lockForUpdate()->with('scores')->findOrFail($review->id);
+            $this->assertSameCompany($review, $actor);
             if ($review->status !== 'draft' || $review->reviewer_id !== $actor->id) {
                 throw new DomainException('Only the assigned reviewer can submit a draft review.');
             }
@@ -104,6 +109,7 @@ class PerformanceReviewService
 
     public function approve(PerformanceReview $review, User $actor): PerformanceReview
     {
+        $this->assertSameCompany($review, $actor);
         if ($review->status !== 'manager_submitted') {
             throw new DomainException('Only a manager-submitted review can be approved.');
         }
@@ -117,7 +123,8 @@ class PerformanceReviewService
 
     public function acknowledge(PerformanceReview $review, User $actor, ?string $comment): PerformanceReview
     {
-        if ($actor->employee?->id !== $review->employee_id) {
+        $this->assertSameCompany($review, $actor);
+        if ($this->employeeIdForUser($actor) !== $review->employee_id) {
             throw new DomainException('You can acknowledge only your own review.');
         }
         if ($review->status !== 'hr_approved') {
@@ -130,6 +137,7 @@ class PerformanceReviewService
 
     public function close(PerformanceReview $review, User $actor): PerformanceReview
     {
+        $this->assertSameCompany($review, $actor);
         if ($review->status !== 'employee_acknowledged') {
             throw new DomainException('The employee must acknowledge the review before closure.');
         }
@@ -140,6 +148,7 @@ class PerformanceReviewService
 
     public function reopen(PerformanceReview $review, User $actor, string $reason): PerformanceReview
     {
+        $this->assertSameCompany($review, $actor);
         if (! in_array($review->status, ['manager_submitted', 'hr_approved', 'employee_acknowledged', 'closed'], true)) {
             throw new DomainException('This review cannot be reopened.');
         }
@@ -177,5 +186,19 @@ class PerformanceReviewService
             $review->period_end->toDateString(),
             $review->scores->map->only(['criterion_name', 'target_value', 'actual_value', 'weight', 'scoring_direction'])->values()->all(),
         ], JSON_THROW_ON_ERROR));
+    }
+
+    private function assertSameCompany(PerformanceReview $review, User $actor): void
+    {
+        if ($actor->companyId() !== (int) $review->company_id) {
+            throw new DomainException('The performance review does not belong to the actor company.');
+        }
+    }
+
+    private function employeeIdForUser(User $user): ?int
+    {
+        $employeeId = Employee::query()->where('user_id', $user->id)->value('id');
+
+        return $employeeId === null ? null : (int) $employeeId;
     }
 }
