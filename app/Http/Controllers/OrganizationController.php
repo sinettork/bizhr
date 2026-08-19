@@ -168,7 +168,7 @@ class OrganizationController extends Controller
             ->when($request->filled('status'), fn ($query) => $query->where('is_active', $request->boolean('status')))
             ->orderBy('sort_order')->orderBy('title')->paginate($this->perPage($request, 20))->withQueryString();
         $branches = Branch::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get();
-        $departments = Department::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get();
+        $departments = Department::query()->with('branch')->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get();
 
         return view('organization.positions', compact('positions', 'branches', 'departments'));
     }
