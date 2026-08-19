@@ -194,25 +194,10 @@ class LeaveRequestController extends Controller
             'note' => ['required', 'string', 'min:3', 'max:1000'],
         ]);
 
-        $service->reject($leaveRequest, $request->user(), trim($validated['note']));
+        $result = $service->reject($leaveRequest, $request->user(), trim($validated['note']));
 
-        return back()->with('status', 'បានបដិសេធសំណើឈប់សម្រាក។');
-    }
-
-    public function cancel(
-        LeaveRequest $leaveRequest,
-        Request $request,
-        LeaveApprovalService $service,
-    ): RedirectResponse {
-        abort_unless($request->user()?->can('leave.approve'), 403);
-        $companyId = $this->currentCompanyId($request);
-        abort_unless($leaveRequest->employee()->where('company_id', $companyId)->exists(), 404);
-        $validated = $request->validate([
-            'reason' => ['required', 'string', 'min:5', 'max:1000'],
-        ]);
-
-        $service->cancelApproved($leaveRequest, $request->user(), trim($validated['reason']));
-
-        return back()->with('status', 'Approved leave cancelled and the leave balance was restored.');
+        return back()->with('status', $result->status === 'cancelled'
+            ? 'Approved leave cancelled and the leave balance was restored.'
+            : 'បានបដិសេធសំណើឈប់សម្រាក។');
     }
 }
