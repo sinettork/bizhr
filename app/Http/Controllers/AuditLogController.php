@@ -11,7 +11,10 @@ class AuditLogController extends Controller
 {
     public function index(Request $request): View
     {
-        $logs = AuditLog::query()->with('user:id,name,email')
+        $companyId = $this->currentCompanyId($request);
+        $base = AuditLog::query()->where('company_id', $companyId);
+
+        $logs = (clone $base)->with('user:id,name,email')
             ->when($request->filled('search'), function ($query) use ($request): void {
                 $search = '%'.trim((string) $request->input('search')).'%';
                 $query->where(fn ($inner) => $inner->where('event_uuid', 'like', $search)->orWhere('record_type', 'like', $search)->orWhere('record_id', 'like', $search)->orWhere('request_id', 'like', $search));
@@ -25,9 +28,12 @@ class AuditLogController extends Controller
 
         return view('audit.index', [
             'logs' => $logs,
-            'users' => User::query()->whereHas('auditLogs')->orderBy('name')->get(['id', 'name']),
-            'modules' => AuditLog::query()->distinct()->orderBy('module')->pluck('module'),
-            'actions' => AuditLog::query()->distinct()->orderBy('action')->pluck('action'),
+            'users' => User::query()
+                ->whereHas('auditLogs', fn ($logs) => $logs->where('company_id', $companyId))
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'modules' => (clone $base)->whereNotNull('module')->distinct()->orderBy('module')->pluck('module'),
+            'actions' => (clone $base)->whereNotNull('action')->distinct()->orderBy('action')->pluck('action'),
         ]);
     }
 }
