@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\User;
@@ -15,7 +16,10 @@ class LeaveApprovalService
 
     private const HR_ROLES = ['HR Administrator', 'Owner', 'Super Admin'];
 
-    public function __construct(private readonly LeaveDayCalculator $dayCalculator) {}
+    public function __construct(
+        private readonly LeaveDayCalculator $dayCalculator,
+        private readonly NotificationService $notifications,
+    ) {}
 
     public function approve(LeaveRequest $leaveRequest, User $reviewer, ?string $note = null): LeaveRequest
     {
@@ -31,6 +35,13 @@ class LeaveApprovalService
                     'manager_reviewed_at' => now(),
                     'manager_note' => $note,
                 ]);
+                $this->notifyEmployee(
+                    $leaveRequest,
+                    'leave_manager_approved',
+                    'Leave request moved to HR review',
+                    'Your manager approved the leave request. It is now waiting for final HR review.',
+                    'info',
+                );
 
                 return $leaveRequest->fresh();
             }
@@ -76,6 +87,13 @@ class LeaveApprovalService
                 'hr_reviewed_at' => now(),
                 'hr_note' => $note,
             ]);
+            $this->notifyEmployee(
+                $leaveRequest,
+                'leave_approved',
+                'Leave request approved',
+                'Your leave request has received final approval.',
+                'success',
+            );
 
             return $leaveRequest->fresh();
         });
@@ -95,6 +113,13 @@ class LeaveApprovalService
                     'manager_reviewed_at' => now(),
                     'manager_note' => $note,
                 ]);
+                $this->notifyEmployee(
+                    $leaveRequest,
+                    'leave_rejected',
+                    'Leave request rejected',
+                    'Your leave request was rejected by your manager. Review the request for any reviewer note.',
+                    'warning',
+                );
 
                 return $leaveRequest->fresh();
             }
@@ -107,6 +132,13 @@ class LeaveApprovalService
                     'hr_reviewed_at' => now(),
                     'hr_note' => $note,
                 ]);
+                $this->notifyEmployee(
+                    $leaveRequest,
+                    'leave_rejected',
+                    'Leave request rejected',
+                    'Your leave request was rejected during final HR review. Review the request for any reviewer note.',
+                    'warning',
+                );
 
                 return $leaveRequest->fresh();
             }
@@ -125,13 +157,42 @@ class LeaveApprovalService
     private function assertManagerCanReview(LeaveRequest $leaveRequest, User $reviewer): void
     {
         abort_unless($reviewer->hasAnyRole(self::MANAGER_ROLES), 403);
-        abort_unless($reviewer->employee !== null, 403);
-        abort_if($reviewer->employee->id === $leaveRequest->employee_id, 403);
-        abort_unless($reviewer->employee->department_id === $leaveRequest->employee->department_id, 403);
+        $reviewerEmployee = Employee::query()
+            ->where('user_id', $reviewer->id)
+            ->where('company_id', $leaveRequest->employee->company_id)
+            ->first();
+        abort_unless($reviewerEmployee !== null, 403);
+        abort_if((int) $reviewerEmployee->id === (int) $leaveRequest->employee_id, 403);
+        abort_unless((int) $reviewerEmployee->department_id === (int) $leaveRequest->employee->department_id, 403);
     }
 
     private function assertHrCanReview(User $reviewer): void
     {
         abort_unless($reviewer->hasAnyRole(self::HR_ROLES), 403);
+    }
+
+    private function notifyEmployee(
+        LeaveRequest $leaveRequest,
+        string $type,
+        string $title,
+        string $message,
+        string $level,
+    ): void {
+        $userId = $leaveRequest->employee->user_id;
+        if ($userId === null) {
+            return;
+        }
+
+        $this->notifications->notify(
+            (int) $userId,
+            $type,
+            $title,
+            $message,
+            '/leave/requests',
+            'calendar-check',
+            $level,
+            ['leave_request_id' => $leaveRequest->public_id],
+            (int) $leaveRequest->employee->company_id,
+        );
     }
 }
