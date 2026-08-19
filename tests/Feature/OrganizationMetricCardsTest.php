@@ -3,6 +3,7 @@
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Department;
+use App\Models\Employee;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Spatie\Permission\Models\Permission;
@@ -11,7 +12,7 @@ test('organization pages render the shared application shell', function (
     string $routeName,
     string $permissionName,
 ) {
-    Company::query()->create([
+    $company = Company::query()->create([
         'name' => 'BizHR Organization',
         'currency' => 'USD',
         'timezone' => 'Asia/Phnom_Penh',
@@ -19,6 +20,10 @@ test('organization pages render the shared application shell', function (
     ]);
 
     $user = User::factory()->create();
+    Employee::factory()->create([
+        'company_id' => $company->id,
+        'user_id' => $user->id,
+    ]);
     Permission::findOrCreate($permissionName, 'web');
     $user->givePermissionTo($permissionName);
 
