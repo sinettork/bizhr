@@ -53,7 +53,7 @@ class Notification extends Model
 
     public function markAsRead(): void
     {
-        if (! $this->is_read) {
+        if (!$this->is_read) {
             $this->update([
                 'is_read' => true,
                 'read_at' => now(),
@@ -66,13 +66,19 @@ class Notification extends Model
         return $this->expires_at?->isPast() ?? false;
     }
 
-    /** @param Builder<Notification> $query */
+    /**
+     * @param  Builder<Notification>  $query
+     * @return Builder<Notification>
+     */
     public function scopeUnread(Builder $query): Builder
     {
         return $query->where('is_read', false);
     }
 
-    /** @param Builder<Notification> $query */
+    /**
+     * @param  Builder<Notification>  $query
+     * @return Builder<Notification>
+     */
     public function scopeActive(Builder $query): Builder
     {
         return $query->where(function (Builder $query): void {
