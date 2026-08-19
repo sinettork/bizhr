@@ -8,7 +8,9 @@
     'deleteUrl' => null,
     'deleteLabel' => 'Delete',
     'deleteIcon' => 'fa-trash',
-    'deleteConfirm' => 'Are you sure?',
+    'deleteConfirm' => 'This action may remove or archive data. Continue?',
+    'deleteConfirmTitle' => null,
+    'deleteTone' => 'danger',
     'ariaLabel' => 'Actions',
 ])
 
@@ -57,7 +59,14 @@
                     <li><hr class="dropdown-divider my-1"></li>
                 @endif
                 <li>
-                    <form method="POST" action="{{ $deleteUrl }}" data-confirm="{{ $deleteConfirm }}">
+                    <form
+                        method="POST"
+                        action="{{ $deleteUrl }}"
+                        data-confirm="{{ $deleteConfirm }}"
+                        data-confirm-title="{{ $deleteConfirmTitle ?: 'Confirm '.strtolower($deleteLabel) }}"
+                        data-confirm-action="{{ $deleteLabel }}"
+                        data-confirm-tone="{{ $deleteTone }}"
+                    >
                         @csrf
                         @method('DELETE')
                         <button class="dropdown-item rounded-1 px-2 py-1 text-danger" type="submit">
