@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\DataExport;
+use App\Services\HrReminderService;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Storage;
 
@@ -28,5 +29,11 @@ Schedule::call(function (): void {
 })
     ->dailyAt('02:00')
     ->name('cleanup-expired-data-exports')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::call(fn (): int => app(HrReminderService::class)->run())
+    ->dailyAt('08:00')
+    ->name('send-hr-milestone-reminders')
     ->withoutOverlapping()
     ->onOneServer();
