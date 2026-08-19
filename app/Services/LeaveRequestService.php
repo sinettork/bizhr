@@ -73,4 +73,24 @@ class LeaveRequestService
             ]);
         });
     }
+
+    public function withdraw(LeaveRequest $leaveRequest, Employee $employee): LeaveRequest
+    {
+        return DB::transaction(function () use ($leaveRequest, $employee): LeaveRequest {
+            $locked = LeaveRequest::query()->lockForUpdate()->findOrFail($leaveRequest->id);
+
+            abort_unless((int) $locked->employee_id === (int) $employee->id, 404);
+            abort_unless((int) $employee->company_id === (int) $locked->employee()->value('company_id'), 404);
+
+            if (! in_array($locked->status, ['pending', 'manager_approved'], true)) {
+                throw ValidationException::withMessages([
+                    'status' => 'មានតែសំណើដែលកំពុងរង់ចាំការអនុម័តប៉ុណ្ណោះដែលអាចដកវិញបាន។',
+                ]);
+            }
+
+            $locked->update(['status' => 'withdrawn']);
+
+            return $locked->fresh();
+        });
+    }
 }
