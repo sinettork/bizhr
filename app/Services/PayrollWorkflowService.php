@@ -122,7 +122,7 @@ class PayrollWorkflowService
             $period = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
             $this->assertSameCompany($period, $actor);
 
-            if (! $actor->hasAnyRole(['Payroll Officer', 'HR Administrator', 'Owner', 'Super Admin'])) {
+            if (! $actor->can('payroll.approve')) {
                 abort(403);
             }
 
@@ -152,7 +152,7 @@ class PayrollWorkflowService
             $period = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
             $this->assertSameCompany($period, $actor);
 
-            if (! $actor->hasAnyRole(['Owner', 'Super Admin'])) {
+            if (! $actor->hasAnyRole(['Owner', 'Super Admin']) || ! $actor->can('payroll.approve')) {
                 abort(403);
             }
 
