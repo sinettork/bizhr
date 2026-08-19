@@ -42,6 +42,10 @@ class PayrollCalculatorService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if ($processor !== null && $processor->companyId() !== (int) $period->company_id) {
+                throw new \DomainException('The payroll processor does not belong to this company.');
+            }
+
             if (! in_array($period->status, ['draft', 'processing'], true)) {
                 throw new \RuntimeException('វគ្គនេះត្រូវបានគណនារួច ឬមិនអាចគណនាឡើងវិញបានទេ។');
             }
@@ -71,6 +75,10 @@ class PayrollCalculatorService
 
     protected function generateEmployee(PayrollPeriod $period, Employee $employee): PayrollItem
     {
+        if ((int) $employee->company_id !== (int) $period->company_id) {
+            throw new \DomainException('The payroll employee does not belong to this company.');
+        }
+
         $settings = PayrollSetting::forCompany($period->company_id);
         $workingDays = max(1, (int) $settings->working_days_per_month);
         $hoursPerDay = max(0.25, (float) $settings->hours_per_day);
