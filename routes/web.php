@@ -115,6 +115,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
 
     Route::get('/leave/requests', [LeaveRequestController::class, 'index'])->middleware('permission:leave.request')->name('leave.requests.index');
     Route::post('/leave/requests', [LeaveRequestController::class, 'store'])->middleware('permission:leave.request')->name('leave.requests.store');
+    Route::post('/leave/requests/{leaveRequest}/withdraw', [LeaveRequestController::class, 'withdraw'])->middleware('permission:leave.request')->name('leave.requests.withdraw');
     Route::get('/leave/review', [LeaveRequestController::class, 'review'])->middleware('permission:leave.approve')->name('leave.requests.review');
     Route::post('/leave/requests/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->middleware('permission:leave.approve')->name('leave.requests.approve');
     Route::post('/leave/requests/{leaveRequest}/reject', [LeaveRequestController::class, 'reject'])->middleware('permission:leave.approve')->name('leave.requests.reject');
