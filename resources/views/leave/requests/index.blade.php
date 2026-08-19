@@ -25,17 +25,21 @@
                         <th>Duration</th>
                         <th>Reason</th>
                         <th>Submitted</th>
-                        <th class="pe-3">Status</th>
+                        <th>Status</th>
+                        <th class="text-end pe-3">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($requests as $leaveRequest)
                         @php
-                            $statusBadge = match($leaveRequest->status) {
-                                'approved' => 'success',
-                                'rejected' => 'danger',
-                                default => 'warning',
+                            [$statusDot, $statusText] = match($leaveRequest->status) {
+                                'approved' => ['bg-success', 'Approved'],
+                                'rejected' => ['bg-danger', 'Rejected'],
+                                'withdrawn' => ['bg-secondary', 'Withdrawn'],
+                                'manager_approved' => ['bg-primary', 'Awaiting HR'],
+                                default => ['bg-warning', 'Pending'],
                             };
+                            $canWithdraw = in_array($leaveRequest->status, ['pending', 'manager_approved'], true);
                         @endphp
                         <tr>
                             <td class="ps-3 fw-medium text-dark">{{ $leaveRequest->leaveType?->name }}</td>
@@ -43,13 +47,36 @@
                             <td>{{ number_format($leaveRequest->total_days ?? 0, 1) }} day{{ ($leaveRequest->total_days ?? 0) == 1 ? '' : 's' }}</td>
                             <td><span class="small text-body-secondary">{{ \Illuminate\Support\Str::limit($leaveRequest->reason, 70) ?: '—' }}</span></td>
                             <td><span class="small text-body-secondary">{{ $leaveRequest->created_at?->format('d M Y') ?? '—' }}</span></td>
-                            <td class="pe-3">
-                                <span class="badge text-bg-{{ $statusBadge }}">{{ ucfirst(str_replace('_', ' ', $leaveRequest->status)) }}</span>
+                            <td>
+                                <span class="d-inline-flex align-items-center gap-2 small fw-medium text-body-secondary">
+                                    <span class="rounded-circle {{ $statusDot }}" style="width:7px;height:7px" aria-hidden="true"></span>
+                                    {{ $statusText }}
+                                </span>
+                            </td>
+                            <td class="text-end pe-3">
+                                @if ($canWithdraw)
+                                    <form
+                                        class="d-inline"
+                                        method="POST"
+                                        action="{{ route('leave.requests.withdraw', $leaveRequest) }}"
+                                        data-confirm="Withdraw this leave request? It will stop moving through the approval workflow."
+                                        data-confirm-title="Withdraw leave request"
+                                        data-confirm-action="Withdraw"
+                                        data-confirm-tone="warning"
+                                    >
+                                        @csrf
+                                        <button class="btn btn-action-link btn-sm text-warning-emphasis" type="submit">
+                                            <i class="fa-solid fa-rotate-left me-1"></i>Withdraw
+                                        </button>
+                                    </form>
+                                @else
+                                    <span class="small text-body-secondary">—</span>
+                                @endif
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td class="text-center text-body-secondary py-5" colspan="6">
+                            <td class="text-center text-body-secondary py-5" colspan="7">
                                 <i class="fa-solid fa-calendar-xmark fa-xl d-block mb-3 text-primary"></i>You haven't requested any time off yet.
                             </td>
                         </tr>
