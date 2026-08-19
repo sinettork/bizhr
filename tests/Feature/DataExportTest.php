@@ -37,10 +37,30 @@ function exportCompanyFixture(): array
     return compact('company', 'branch', 'department');
 }
 
+function exportCompanyUser(array $fixture): User
+{
+    $user = User::factory()->create();
+    Employee::query()->create([
+        'company_id' => $fixture['company']->id,
+        'branch_id' => $fixture['branch']->id,
+        'department_id' => $fixture['department']->id,
+        'user_id' => $user->id,
+        'employee_code' => 'EXPORT-USER-'.$user->id,
+        'first_name' => 'Export',
+        'last_name' => 'User',
+        'hire_date' => today(),
+        'employment_status' => 'Active',
+        'salary_currency' => 'USD',
+        'is_active' => true,
+    ]);
+
+    return $user->fresh();
+}
+
 it('queues an authorized employee export without doing the work in the request', function () {
     Queue::fake();
     $fixture = exportCompanyFixture();
-    $user = User::factory()->create();
+    $user = exportCompanyUser($fixture);
     Permission::findOrCreate('employee.view-sensitive', 'web');
     $user->givePermissionTo('employee.view-sensitive');
 
@@ -58,8 +78,8 @@ it('queues an authorized employee export without doing the work in the request',
 });
 
 it('does not expose salary data to users with basic employee access', function () {
-    exportCompanyFixture();
-    $user = User::factory()->create();
+    $fixture = exportCompanyFixture();
+    $user = exportCompanyUser($fixture);
     Permission::findOrCreate('employee.view', 'web');
     $user->givePermissionTo('employee.view');
 
@@ -71,8 +91,8 @@ it('does not expose salary data to users with basic employee access', function (
 });
 
 it('rejects an export when the user lacks the matching report permission', function () {
-    exportCompanyFixture();
-    $user = User::factory()->create();
+    $fixture = exportCompanyFixture();
+    $user = exportCompanyUser($fixture);
 
     $this->actingAs($user)
         ->post(route('exports.store', 'payroll'))
@@ -84,7 +104,7 @@ it('rejects an export when the user lacks the matching report permission', funct
 it('generates a private employee Excel file and neutralizes spreadsheet formulas', function () {
     Storage::fake('local');
     $fixture = exportCompanyFixture();
-    $user = User::factory()->create();
+    $user = exportCompanyUser($fixture);
     Employee::query()->create([
         'company_id' => $fixture['company']->id,
         'branch_id' => $fixture['branch']->id,
@@ -111,24 +131,53 @@ it('generates a private employee Excel file and neutralizes spreadsheet formulas
     $export->refresh();
     expect($export->status)->toBe('completed')
         ->and($export->progress)->toBe(100)
-        ->and($export->row_count)->toBe(1)
+        ->and($export->row_count)->toBe(2)
         ->and($export->expires_at)->not->toBeNull();
 
     Storage::disk('local')->assertExists($export->file_path);
     expect(Storage::disk('local')->get($export->file_path))->toStartWith('PK');
-    $values = SimpleExcelReader::create(Storage::disk('local')->path($export->file_path), 'xlsx')
+    $rows = SimpleExcelReader::create(Storage::disk('local')->path($export->file_path), 'xlsx')
         ->noHeaderRow()
         ->getRows()
-        ->skip(1)
-        ->first();
-    expect($values[0])->toBe("'=1+1");
+        ->skip(1);
+    $values = $rows->first(fn ($row) => ($row[0] ?? null) === "'=1+1");
+    expect($values)->not->toBeNull();
+});
+
+it('treats duplicate delivery of a completed export job as a no-op', function () {
+    Storage::fake('local');
+    $fixture = exportCompanyFixture();
+    $user = exportCompanyUser($fixture);
+    $export = DataExport::query()->create([
+        'user_id' => $user->id,
+        'company_id' => $fixture['company']->id,
+        'type' => 'employees',
+        'filters' => [],
+        'status' => 'queued',
+        'disk' => 'local',
+        'file_name' => 'employees.xlsx',
+    ]);
+
+    $job = new GenerateDataExport($export->id);
+    $job->handle();
+    $completed = $export->fresh();
+    $path = $completed->file_path;
+    $completedAt = $completed->completed_at;
+
+    $job->handle();
+
+    $export->refresh();
+    expect($export->status)->toBe('completed')
+        ->and($export->file_path)->toBe($path)
+        ->and($export->completed_at?->equalTo($completedAt))->toBeTrue();
+    Storage::disk('local')->assertExists($path);
 });
 
 it('only lets the export owner download a completed file', function () {
     Storage::fake('local');
     $fixture = exportCompanyFixture();
-    $owner = User::factory()->create();
-    $otherUser = User::factory()->create();
+    $owner = exportCompanyUser($fixture);
+    $otherUser = exportCompanyUser($fixture);
     Storage::disk('local')->put('exports/test.xlsx', 'Excel file');
     $export = DataExport::query()->create([
         'user_id' => $owner->id,
