@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Employee;
 use App\Models\ExpenseClaim;
 use App\Models\User;
 use DomainException;
@@ -13,6 +14,7 @@ class ExpenseWorkflowService
     {
         return DB::transaction(function () use ($claim, $actor, $approved, $note) {
             $claim = ExpenseClaim::query()->lockForUpdate()->findOrFail($claim->id);
+            $this->assertSameCompany($claim, $actor);
             if ($claim->status !== 'pending_manager') {
                 throw new DomainException('Claim is not waiting for manager review.');
             }
@@ -33,6 +35,7 @@ class ExpenseWorkflowService
     {
         return DB::transaction(function () use ($claim, $actor, $approved, $note) {
             $claim = ExpenseClaim::query()->lockForUpdate()->findOrFail($claim->id);
+            $this->assertSameCompany($claim, $actor);
             if ($claim->status !== 'pending_accounting') {
                 throw new DomainException('Claim is not waiting for accounting.');
             }
@@ -57,6 +60,7 @@ class ExpenseWorkflowService
 
         return DB::transaction(function () use ($claim, $actor, $reference) {
             $claim = ExpenseClaim::query()->lockForUpdate()->findOrFail($claim->id);
+            $this->assertSameCompany($claim, $actor);
             if ($claim->status !== 'approved') {
                 throw new DomainException('Only an approved claim with a payment reference can be paid.');
             }
@@ -64,5 +68,14 @@ class ExpenseWorkflowService
 
             return $claim->refresh();
         });
+    }
+
+    private function assertSameCompany(ExpenseClaim $claim, User $actor): void
+    {
+        $companyId = Employee::query()->whereKey($claim->employee_id)->value('company_id');
+
+        if ($companyId === null || $actor->companyId() !== (int) $companyId) {
+            throw new DomainException('The expense claim does not belong to the actor company.');
+        }
     }
 }
