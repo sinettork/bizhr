@@ -11,11 +11,12 @@ class TaskWorkflowService
 {
     public function updateProgress(Task $task, User $actor, int $progress, ?string $note): Task
     {
-        $this->assertSameCompany($task, $actor);
         if ($progress < 0 || $progress > 100) {
             throw new DomainException('Progress must be between 0 and 100.');
         }
-        if ($actor->employee?->id !== $task->assigned_to) {
+        $this->assertSameCompany($task, $actor);
+        $actorEmployeeId = $actor->employee()->value('id');
+        if ((int) $actorEmployeeId !== (int) $task->assigned_to) {
             throw new DomainException('You can update only your own assigned task.');
         }
         if (in_array($task->status, ['verified', 'cancelled'], true)) {
@@ -40,7 +41,8 @@ class TaskWorkflowService
             if ($task->status !== 'waiting_verification') {
                 throw new DomainException('Only a submitted task can be verified.');
             }
-            if ($actor->employee?->id === $task->assigned_to && ! $actor->hasRole('Super Admin')) {
+            $actorEmployeeId = $actor->employee()->value('id');
+            if ((int) $actorEmployeeId === (int) $task->assigned_to && ! $actor->hasRole('Super Admin')) {
                 throw new DomainException('An employee cannot verify their own task.');
             }
 
