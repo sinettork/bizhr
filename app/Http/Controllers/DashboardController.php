@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendance;
 use App\Models\AttendanceCorrection;
-use App\Models\Company;
 use App\Models\DataExport;
 use App\Models\Employee;
 use App\Models\EmployeeSchedule;
@@ -16,7 +15,6 @@ use App\Models\Task;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -26,21 +24,15 @@ class DashboardController extends Controller
         $user = $request->user();
         abort_unless($user instanceof User, 403);
 
-        $employee = Employee::query()->where('user_id', $user->id)->first();
-        $companyId = $employee->company_id ?? Cache::remember(
-            'dashboard:default-company-id',
-            now()->addMinutes(10),
-            fn (): ?int => Company::query()->value('id'),
-        );
+        $companyId = $this->currentCompanyId($request);
+        $employee = Employee::query()->where('user_id', $user->id)->where('company_id', $companyId)->first();
         $isManagerOrAdmin = $user->can('attendance.report') || $user->can('employee.view');
         $managerDepartmentId = $user->hasRole('Manager') && ! $user->hasAnyRole(['Super Admin', 'Owner', 'HR Administrator'])
             ? $employee?->department_id
             : null;
 
         $scopeEmployees = static function (Builder $query) use ($companyId, $managerDepartmentId): void {
-            if ($companyId) {
-                $query->where('company_id', $companyId);
-            }
+            $query->where('company_id', $companyId);
 
             if ($managerDepartmentId) {
                 $query->where('department_id', $managerDepartmentId);
@@ -54,7 +46,7 @@ class DashboardController extends Controller
             'leave' => 0,
             'openTasks' => 0,
             'leaveBalance' => 0,
-            'pendingExports' => DataExport::query()->where('user_id', $user->id)->whereIn('status', ['queued', 'processing'])->count(),
+            'pendingExports' => DataExport::query()->where('company_id', $companyId)->where('user_id', $user->id)->whereIn('status', ['queued', 'processing'])->count(),
             'pendingExpenses' => 0,
             'pendingPayroll' => 0,
         ];
@@ -81,19 +73,19 @@ class DashboardController extends Controller
         $myUpcomingLeave = collect();
 
         if ($employee) {
-            $metrics['openTasks'] = Task::query()->where('assigned_to', $employee->id)->whereNotIn('status', ['verified', 'cancelled'])->count();
+            $metrics['openTasks'] = Task::query()->where('company_id', $companyId)->where('assigned_to', $employee->id)->whereNotIn('status', ['verified', 'cancelled'])->count();
             $metrics['leaveBalance'] = LeaveBalance::query()->where('employee_id', $employee->id)->sum('remaining_days');
             $myAttendance = Attendance::query()->where('employee_id', $employee->id)->whereDate('work_date', today())->first();
             $mySchedule = EmployeeSchedule::query()->with('workShift')->where('employee_id', $employee->id)->whereDate('work_date', today())->first();
-            $myTasks = Task::query()->where('assigned_to', $employee->id)->whereNotIn('status', ['verified', 'cancelled'])->orderBy('due_date')->limit(5)->get();
+            $myTasks = Task::query()->where('company_id', $companyId)->where('assigned_to', $employee->id)->whereNotIn('status', ['verified', 'cancelled'])->orderBy('due_date')->limit(5)->get();
             $myUpcomingLeave = LeaveRequest::query()->with('leaveType')->where('employee_id', $employee->id)->whereIn('status', ['pending', 'manager_approved', 'approved'])->whereDate('end_date', '>=', today())->orderBy('start_date')->limit(3)->get();
         }
 
-        if ($user->can('payroll.view') && $companyId) {
+        if ($user->can('payroll.view')) {
             $metrics['pendingPayroll'] = PayrollPeriod::query()->where('company_id', $companyId)->where('status', 'awaiting_approval')->count();
         }
-        if ($user->can('expense.view') && $companyId) {
-            $metrics['pendingExpenses'] = ExpenseClaim::query()->whereIn('status', ['pending_manager', 'pending_accounting'])->whereHas('employee', fn (Builder $query) => $query->where('company_id', $companyId))->count();
+        if ($user->can('expense.view')) {
+            $metrics['pendingExpenses'] = ExpenseClaim::query()->where('company_id', $companyId)->whereIn('status', ['pending_manager', 'pending_accounting'])->count();
         }
 
         $recentAttendances = $isManagerOrAdmin
