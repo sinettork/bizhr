@@ -117,9 +117,9 @@ class LeaveApprovalService
 
     private function assertSameCompany(LeaveRequest $leaveRequest, User $reviewer): void
     {
-        if ($reviewer->employee && $reviewer->employee->company_id !== $leaveRequest->employee->company_id) {
-            abort(403);
-        }
+        $companyId = $reviewer->companyId();
+        abort_unless($companyId !== null, 403);
+        abort_unless((int) $leaveRequest->employee->company_id === $companyId, 404);
     }
 
     private function assertManagerCanReview(LeaveRequest $leaveRequest, User $reviewer): void
