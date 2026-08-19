@@ -44,7 +44,7 @@ html {
     height: 30px;
     color: #fff;
     background: var(--app-indigo);
-    border-radius: .4rem;
+    border-radius: .3rem;
 }
 
 .app-sidebar-toggle,
@@ -75,7 +75,7 @@ html {
     min-width: 220px;
     margin-top: .35rem;
     border: 1px solid var(--app-line) !important;
-    border-radius: .4rem;
+    border-radius: .35rem;
 }
 
 .app-topbar .dropdown-item {
@@ -150,7 +150,7 @@ html {
     gap: .65rem;
     padding: .48rem .65rem;
     border: 0;
-    border-radius: .32rem;
+    border-radius: .28rem;
     color: #4b5b73;
     background: transparent;
     font-size: .79rem;
@@ -231,6 +231,106 @@ html {
     position: relative;
     min-width: 0;
     min-height: calc(100dvh - var(--app-shell-topbar-height));
+}
+
+/* BizHR DNA guardrails: compact hierarchy, quiet surfaces, restrained summaries. */
+.workspace-command-bar {
+    min-height: 44px;
+    margin-bottom: .55rem;
+    gap: .4rem .65rem;
+}
+
+.workspace-command-title {
+    min-width: 160px;
+    padding: .2rem 0;
+    gap: .5rem;
+}
+
+.workspace-command-title > i {
+    width: 22px;
+    color: var(--app-blue);
+    text-align: center;
+}
+
+.workspace-command-context {
+    margin: 0 0 .05rem;
+    color: #748197;
+    font-size: .62rem;
+    font-weight: 650;
+    letter-spacing: .035em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.workspace-command-title h1 {
+    color: #243c69;
+    font-size: .84rem;
+    font-weight: 700;
+    line-height: 1.25;
+    text-transform: none;
+}
+
+.workspace-command-actions {
+    gap: .35rem;
+}
+
+.workspace-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 0 0 .65rem;
+    padding: .45rem .65rem;
+    border: 1px solid var(--app-line);
+    border-radius: .32rem;
+    background: #fff;
+}
+
+.workspace-summary-item {
+    min-width: 120px;
+    padding: .2rem .85rem .2rem 0;
+    margin-right: .85rem;
+    border: 0;
+    border-right: 1px solid #edf0f5;
+    border-radius: 0;
+    background: transparent;
+}
+
+.workspace-summary-item:last-child {
+    margin-right: 0;
+    padding-right: 0;
+    border-right: 0;
+}
+
+.workspace-summary-item .label {
+    color: #748197;
+    font-size: .68rem;
+    font-weight: 600;
+}
+
+.workspace-summary-item .value {
+    margin-top: .05rem;
+    color: #263e6b;
+    font-size: .98rem;
+    font-weight: 700;
+}
+
+.profile-card,
+.reference-list,
+.card {
+    box-shadow: 0 1px 2px rgba(38, 55, 99, .035) !important;
+}
+
+.profile-card-header,
+.card-header {
+    min-height: 44px;
+}
+
+.metric-icon,
+.page-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: .3rem;
+    font-size: .9rem;
 }
 
 /* Empty states are one centered visual unit: icon, title, helper text, then actions. */
@@ -344,6 +444,36 @@ html {
         padding-left: .75rem !important;
         padding-right: .75rem !important;
         padding-top: .75rem !important;
+    }
+
+    .workspace-command-title,
+    .workspace-command-filters,
+    .workspace-command-actions {
+        flex-basis: 100%;
+    }
+
+    .workspace-command-actions {
+        justify-content: flex-start;
+        margin-left: 0;
+    }
+
+    .workspace-summary {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        padding: .45rem .6rem;
+    }
+
+    .workspace-summary-item,
+    .workspace-summary-item:last-child {
+        min-width: 0;
+        margin: 0;
+        padding: .35rem .5rem;
+        border-right: 0;
+        border-bottom: 1px solid #edf0f5;
+    }
+
+    .workspace-summary-item:nth-last-child(-n+2) {
+        border-bottom: 0;
     }
 
     .profile-nav-tabs {
