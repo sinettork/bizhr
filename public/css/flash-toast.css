@@ -1,0 +1,76 @@
+.app-toast-region {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1090;
+    display: grid;
+    gap: .55rem;
+    width: min(360px, calc(100vw - 2rem));
+    pointer-events: none;
+}
+
+.app-action-toast {
+    display: grid;
+    grid-template-columns: 3px 30px minmax(0, 1fr) 30px;
+    align-items: center;
+    width: 100%;
+    min-height: 48px;
+    padding: 0;
+    overflow: hidden;
+    color: #24344d;
+    background: rgba(255, 255, 255, .98);
+    border: 1px solid #d9e0ee;
+    border-radius: .35rem;
+    box-shadow: 0 8px 24px rgba(38, 55, 99, .12);
+    pointer-events: auto;
+}
+
+.app-action-toast-indicator {
+    align-self: stretch;
+    background: #198754;
+}
+
+.app-action-toast-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #198754;
+    font-size: .85rem;
+}
+
+.app-action-toast .toast-body {
+    min-width: 0;
+    padding: .72rem .45rem .72rem .2rem;
+    font-size: .81rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.app-action-toast-close {
+    justify-self: center;
+    width: .65rem;
+    height: .65rem;
+    padding: .3rem;
+    margin: 0;
+    opacity: .45;
+}
+
+.app-action-toast-close:hover,
+.app-action-toast-close:focus {
+    opacity: .75;
+}
+
+@media (max-width: 575.98px) {
+    .app-toast-region {
+        top: .65rem;
+        right: .65rem;
+        left: .65rem;
+        width: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-action-toast {
+        transition: none !important;
+    }
+}
