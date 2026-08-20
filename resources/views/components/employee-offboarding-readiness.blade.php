@@ -2,18 +2,18 @@
     $isSeparated = in_array($employee->employment_status, ['Resigned', 'Terminated', 'Retired'], true);
 @endphp
 
-<section class="reference-list mb-3" aria-labelledby="offboarding-readiness-title">
-    <div class="px-3 py-2 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
-        <div>
-            <h2 class="h6 fw-bold text-dark mb-0" id="offboarding-readiness-title">Offboarding readiness</h2>
-            <div class="small text-body-secondary">Review operational handover before setting this employee to Resigned, Terminated, or Retired.</div>
-        </div>
+<details class="reference-list mb-3" @if($isSeparated && ! $readiness['ready']) open @endif>
+    <summary class="px-3 py-2 d-flex flex-wrap align-items-center justify-content-between gap-2" style="cursor:pointer;list-style:none;">
+        <span>
+            <span class="fw-semibold text-dark">Offboarding readiness</span>
+            <span class="small text-body-secondary ms-2">Check handover before Resigned, Terminated, or Retired.</span>
+        </span>
         <span class="status-text text-bg-{{ $readiness['ready'] ? 'success' : 'warning' }}">
             {{ $readiness['ready'] ? 'Ready' : $readiness['outstanding'].' area'.($readiness['outstanding'] === 1 ? '' : 's').' need attention' }}
         </span>
-    </div>
+    </summary>
 
-    <div class="table-responsive">
+    <div class="table-responsive border-top">
         <table class="table table-hover align-middle mb-0">
             <thead>
                 <tr>
@@ -44,4 +44,4 @@
             This employee is already separated, but operational handover still has outstanding items. Resolve them before archiving the employee record.
         </div>
     @endif
-</section>
+</details>
