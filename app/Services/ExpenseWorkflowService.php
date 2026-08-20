@@ -13,6 +13,10 @@ class ExpenseWorkflowService
 {
     public function managerReview(ExpenseClaim $claim, User $actor, bool $approved, string $note): ExpenseClaim
     {
+        if ($claim->status !== 'pending_manager') {
+            throw new DomainException('Claim is not waiting for manager review.');
+        }
+
         return DB::transaction(function () use ($claim, $actor, $approved, $note) {
             $claim = ExpenseClaim::query()->lockForUpdate()->findOrFail($claim->id);
             $this->assertSameCompany($claim, $actor);
@@ -43,6 +47,10 @@ class ExpenseWorkflowService
 
     public function accountingReview(ExpenseClaim $claim, User $actor, bool $approved, string $note): ExpenseClaim
     {
+        if ($claim->status !== 'pending_accounting') {
+            throw new DomainException('Claim is not waiting for accounting.');
+        }
+
         return DB::transaction(function () use ($claim, $actor, $approved, $note) {
             $claim = ExpenseClaim::query()->lockForUpdate()->findOrFail($claim->id);
             $this->assertSameCompany($claim, $actor);
@@ -73,7 +81,7 @@ class ExpenseWorkflowService
 
     public function markPaid(ExpenseClaim $claim, User $actor, string $reference): ExpenseClaim
     {
-        if (mb_strlen(trim($reference)) < 3) {
+        if (mb_strlen(trim($reference)) < 3 || $claim->status !== 'approved') {
             throw new DomainException('Only an approved claim with a payment reference can be paid.');
         }
 
