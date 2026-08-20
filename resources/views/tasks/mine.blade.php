@@ -22,33 +22,29 @@
         <div class="alert alert-danger d-flex align-items-center gap-2"><i class="fa-solid fa-circle-exclamation"></i><span>{{ $errors->first() }}</span></div>
     @endif
 
-    <div class="row g-2 mb-3">
-        @foreach([
-            ['Open', $statistics['open'], 'fa-list-check', 'primary'],
-            ['Overdue', $statistics['overdue'], 'fa-clock', 'danger'],
-            ['Waiting verification', $statistics['waiting'], 'fa-hourglass-half', 'warning'],
-            ['Completed', $statistics['completed'], 'fa-circle-check', 'success'],
-        ] as [$label, $value, $icon, $tone])
-            <div class="col-6 col-xl-3">
-                <section class="profile-card h-100 mb-0">
-                    <div class="profile-card-body py-3">
-                        <div class="d-flex align-items-center gap-3">
-                            <span class="metric-icon bg-{{ $tone }}-subtle text-{{ $tone }}"><i class="fa-solid {{ $icon }}"></i></span>
-                            <div>
-                                <div class="small text-body-secondary">{{ $label }}</div>
-                                <div class="fs-5 fw-bold text-dark">{{ number_format($value) }}</div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            </div>
-        @endforeach
+    <div class="workspace-summary" aria-label="Task summary">
+        <div class="workspace-summary-item">
+            <div class="label">Open</div>
+            <div class="value">{{ number_format($statistics['open']) }}</div>
+        </div>
+        <div class="workspace-summary-item">
+            <div class="label">Overdue</div>
+            <div class="value {{ $statistics['overdue'] > 0 ? 'text-danger' : '' }}">{{ number_format($statistics['overdue']) }}</div>
+        </div>
+        <div class="workspace-summary-item">
+            <div class="label">Waiting verification</div>
+            <div class="value">{{ number_format($statistics['waiting']) }}</div>
+        </div>
+        <div class="workspace-summary-item">
+            <div class="label">Completed</div>
+            <div class="value">{{ number_format($statistics['completed']) }}</div>
+        </div>
     </div>
 
     @if($statistics['overdue'] > 0)
-        <div class="alert alert-warning d-flex align-items-start gap-2">
-            <i class="fa-solid fa-triangle-exclamation mt-1"></i>
-            <div><strong>{{ $statistics['overdue'] }} overdue task{{ $statistics['overdue'] === 1 ? '' : 's' }}.</strong> Update progress or add a work note so your manager can see the latest status.</div>
+        <div class="small text-danger mb-3 d-flex align-items-center gap-2">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>{{ $statistics['overdue'] }} overdue task{{ $statistics['overdue'] === 1 ? '' : 's' }}. Update progress or add a work note so your manager sees the latest status.</span>
         </div>
     @endif
 
@@ -80,7 +76,7 @@
                                 'urgent' => 'danger',
                                 'high' => 'warning',
                                 'medium' => 'info',
-                                default => 'light border text-dark',
+                                default => 'secondary',
                             };
                         @endphp
                         <tr>
@@ -95,28 +91,22 @@
                             </td>
                             <td><span class="badge text-bg-{{ $priorityBadge }} text-uppercase">{{ $task->priority }}</span></td>
                             <td>
-                                <span class="{{ $task->effective_status === 'overdue' ? 'text-danger fw-bold' : '' }}">
-                                    {{ $task->due_date->format('d M Y') }}
-                                </span>
-                                @if($task->effective_status === 'overdue')
-                                    <small class="d-block text-danger">Past due</small>
-                                @endif
+                                <span class="{{ $task->effective_status === 'overdue' ? 'text-danger fw-semibold' : '' }}">{{ $task->due_date->format('d M Y') }}</span>
+                                @if($task->effective_status === 'overdue')<small class="d-block text-danger">Past due</small>@endif
                             </td>
                             <td>
                                 <div class="d-flex align-items-center gap-2" style="min-width: 130px; max-width: 170px;">
-                                    <div class="progress flex-grow-1" style="height: 6px;">
-                                        <div class="progress-bar bg-primary" role="progressbar" style="width: {{ max(0, min(100, $task->progress)) }}%;"></div>
+                                    <div class="progress flex-grow-1" style="height: 5px;">
+                                        <div class="progress-bar" role="progressbar" style="width: {{ max(0, min(100, $task->progress)) }}%;"></div>
                                     </div>
                                     <span class="small fw-semibold">{{ $task->progress }}%</span>
                                 </div>
                             </td>
-                            <td>
-                                <span class="badge text-bg-{{ $statusBadge }}">{{ str($task->effective_status)->replace('_', ' ')->title() }}</span>
-                            </td>
+                            <td><span class="badge text-bg-{{ $statusBadge }}">{{ str($task->effective_status)->replace('_', ' ')->title() }}</span></td>
                             <td class="text-end pe-3 text-nowrap">
                                 @if(!in_array($task->status, ['verified','cancelled'], true))
-                                    <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#updateTask{{ $task->id }}">
-                                        <i class="fa-solid fa-pen me-1"></i>{{ $task->progress >= 100 ? 'Submit update' : 'Update progress' }}
+                                    <button class="btn btn-action-link btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#updateTask{{ $task->id }}">
+                                        <i class="fa-solid fa-pen"></i><span>{{ $task->progress >= 100 ? 'Submit update' : 'Update progress' }}</span>
                                     </button>
                                 @else
                                     <span class="small text-body-secondary"><i class="fa-solid fa-lock me-1"></i>Closed</span>
@@ -150,10 +140,7 @@
                             <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <div class="alert alert-light border small">
-                                <i class="fa-solid fa-circle-info text-primary me-1"></i>
-                                Set progress to 100% when your work is ready for manager verification. Add a short note describing what was completed.
-                            </div>
+                            <p class="small text-body-secondary mb-3">Set progress to 100% when the work is ready for manager verification. Add a short note describing what changed.</p>
                             <div class="mb-3">
                                 <label class="form-label">Completion progress <span class="text-danger">*</span></label>
                                 <div class="input-group">
