@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Asset;
 use App\Models\AssetAssignment;
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\User;
 use DomainException;
@@ -30,6 +31,7 @@ class AssetWorkflowService
                 throw new DomainException('Assets can be assigned only to an active employee.');
             }
 
+            $before = $asset->only(['status', 'condition']);
             $assignment = AssetAssignment::query()->create([
                 'asset_id' => $asset->id,
                 'employee_id' => $employee->id,
@@ -40,6 +42,18 @@ class AssetWorkflowService
                 'assigned_by' => $actor->id,
             ]);
             $asset->update(['status' => 'assigned', 'condition' => $condition]);
+            AuditLog::record(
+                $asset,
+                'assigned',
+                $before,
+                [
+                    'status' => 'assigned',
+                    'condition' => $condition,
+                    'employee_id' => $employee->id,
+                    'assignment_id' => $assignment->id,
+                ],
+                $actor,
+            );
 
             return $assignment;
         });
@@ -57,6 +71,12 @@ class AssetWorkflowService
             if ($assignment->status !== 'assigned') {
                 throw new DomainException('This assignment is already closed.');
             }
+
+            $before = [
+                'assignment_status' => $assignment->status,
+                'asset_status' => $asset->status,
+                'condition' => $asset->condition,
+            ];
             $assignment->update([
                 'status' => 'returned',
                 'returned_date' => today(),
@@ -68,6 +88,20 @@ class AssetWorkflowService
                 'status' => in_array($condition, ['lost', 'retired'], true) ? $condition : 'available',
                 'condition' => $condition,
             ]);
+            AuditLog::record(
+                $asset,
+                'assignment_closed',
+                $before,
+                [
+                    'assignment_status' => 'returned',
+                    'asset_status' => $asset->status,
+                    'condition' => $condition,
+                    'employee_id' => $assignment->employee_id,
+                    'assignment_id' => $assignment->id,
+                    'received_by' => $actor->id,
+                ],
+                $actor,
+            );
 
             return $assignment->refresh();
         });
