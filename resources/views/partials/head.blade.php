@@ -9,3 +9,4 @@
 <link href="{{ asset('css/app.css') }}" rel="stylesheet">
 <link href="{{ asset('css/status.css') }}" rel="stylesheet">
 <link href="{{ asset('css/app-shell.css') }}" rel="stylesheet">
+<link href="{{ asset('css/flash-toast.css') }}" rel="stylesheet">
