@@ -11,9 +11,9 @@
     'approveConfirmTitle' => 'Confirm approval',
 ])
 
-<div {{ $attributes->class(['d-flex flex-wrap gap-2 decision-actions']) }}>
-    <button class="btn btn-outline-danger {{ $compact ? 'btn-sm' : '' }}" type="button" data-bs-toggle="modal" data-bs-target="{{ $rejectTarget }}">
-        <i class="fa-solid {{ $rejectIcon }} me-1"></i>{{ $rejectLabel }}
+<div {{ $attributes->class(['d-flex flex-wrap align-items-center gap-2 decision-actions']) }}>
+    <button class="btn btn-action-link text-danger {{ $compact ? 'btn-sm' : '' }}" type="button" data-bs-toggle="modal" data-bs-target="{{ $rejectTarget }}">
+        <i class="fa-solid {{ $rejectIcon }}"></i><span>{{ $rejectLabel }}</span>
     </button>
 
     <form
@@ -22,13 +22,13 @@
         data-confirm="{{ $approveConfirm }}"
         data-confirm-title="{{ $approveConfirmTitle }}"
         data-confirm-action="{{ $approveLabel }}"
-        data-confirm-tone="success"
+        data-confirm-tone="primary"
     >
         @csrf
         @foreach($approveFields as $name => $value)
             <input type="hidden" name="{{ $name }}" value="{{ $value }}">
         @endforeach
-        <button class="btn btn-success {{ $compact ? 'btn-sm' : '' }}" type="submit">
+        <button class="btn btn-primary {{ $compact ? 'btn-sm' : '' }}" type="submit">
             <i class="fa-solid {{ $approveIcon }} me-1"></i>{{ $approveLabel }}
         </button>
     </form>
