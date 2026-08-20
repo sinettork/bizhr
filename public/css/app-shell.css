@@ -23,7 +23,8 @@ html {
     height: var(--app-shell-topbar-height);
     min-height: var(--app-shell-topbar-height);
     border-top: 3px solid #4b43cf;
-    background: #fff;
+    background: #fff !important;
+    background-image: none !important;
     color: var(--app-ink);
     box-shadow: 0 1px 0 rgba(31, 45, 78, .1) !important;
 }
@@ -38,6 +39,24 @@ html {
 }
 
 .app-topbar .navbar-brand:hover { color: #243c69; }
+
+/* Legacy app.css once styled .app-navbar as a dark horizontal navigation bar.
+   Keep the current white utility topbar fully isolated from those selectors. */
+.app-topbar.app-navbar .nav-link {
+    margin: 0;
+    padding: .45rem .6rem !important;
+    border-radius: .3rem;
+    color: #51617a;
+    background: transparent;
+    font-size: .78rem;
+    font-weight: 600;
+}
+
+.app-topbar.app-navbar .nav-link:hover,
+.app-topbar.app-navbar .nav-link.active {
+    color: #3430a7;
+    background: #f0f2ff;
+}
 
 .app-topbar .brand-mark {
     width: 30px;
