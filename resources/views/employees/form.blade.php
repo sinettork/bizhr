@@ -6,6 +6,59 @@
 
     @if($employee->exists)
         <x-employee-offboarding-readiness :employee="$employee" />
+
+        @if(in_array($employee->employment_status, ['Resigned', 'Terminated', 'Retired'], true) && auth()->user()->can('employee.edit'))
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between gap-2">
+                    <span><i class="fa-solid fa-user-plus text-primary me-2"></i>Rehire workflow</span>
+                    @if($employee->rehire_requested_at && !$employee->rehire_approved_at)
+                        <span class="status-text"><span class="status-dot is-warning"></span>Waiting approval</span>
+                    @else
+                        <span class="status-text"><span class="status-dot is-muted"></span>No pending request</span>
+                    @endif
+                </div>
+                <div class="card-body">
+                    @if($employee->rehire_requested_at && !$employee->rehire_approved_at)
+                        <div class="row g-3 align-items-end">
+                            <div class="col-lg-8">
+                                <div class="small text-body-secondary mb-1">Requested effective date</div>
+                                <div class="fw-semibold">{{ $employee->rehire_effective_date?->format('d M Y') ?? '—' }}</div>
+                                <div class="small text-body-secondary mt-2">Reason</div>
+                                <div>{{ $employee->rehire_reason }}</div>
+                            </div>
+                            <div class="col-lg-4 text-lg-end">
+                                @if(auth()->user()->can('employee.approve'))
+                                    @if((int) $employee->rehire_requested_by === (int) auth()->id())
+                                        <div class="small text-body-secondary">The requester cannot approve the same rehire request.</div>
+                                    @else
+                                        <form method="POST" action="{{ route('employees.rehire.approve', $employee) }}" data-confirm="Approve this rehire and reactivate the employee account?">
+                                            @csrf
+                                            <button class="btn btn-primary btn-sm" type="submit"><i class="fa-solid fa-circle-check me-1"></i>Approve rehire</button>
+                                        </form>
+                                    @endif
+                                @endif
+                            </div>
+                        </div>
+                    @else
+                        <form method="POST" action="{{ route('employees.rehire.request', $employee) }}" class="row g-3 align-items-end">
+                            @csrf
+                            <div class="col-md-4">
+                                <label class="form-label" for="rehire_effective_date">Effective date</label>
+                                <input class="form-control" id="rehire_effective_date" type="date" name="effective_date" value="{{ old('effective_date', today()->format('Y-m-d')) }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="rehire_reason">Reason for rehire</label>
+                                <input class="form-control" id="rehire_reason" name="reason" minlength="15" maxlength="1000" placeholder="Business reason and return context" required>
+                            </div>
+                            <div class="col-md-2 d-grid">
+                                <button class="btn btn-outline-primary" type="submit"><i class="fa-solid fa-paper-plane me-1"></i>Request</button>
+                            </div>
+                        </form>
+                        <div class="form-text mt-2">Rehire requires a separate approver. Submitting this request does not reactivate the employee.</div>
+                    @endif
+                </div>
+            </div>
+        @endif
     @endif
 
     <form method="POST" enctype="multipart/form-data" action="{{ $employee->exists ? route('employees.update', $employee) : route('employees.store') }}">
