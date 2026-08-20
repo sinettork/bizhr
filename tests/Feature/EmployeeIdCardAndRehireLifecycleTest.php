@@ -53,7 +53,7 @@ it('does not let the rehire requester approve their own request', function (): v
 });
 
 it('reactivates an employee only after a separate approver approves rehire', function (): void {
-    $hr = User::query()->where('email', 'hr@bizhr.local')->firstOrFail();
+    $hr = User::query()->where('email', 'sreypov@bizhr.local')->firstOrFail();
     $this->employee->update(['employment_status' => 'Resigned', 'is_active' => false]);
 
     $this->actingAs($hr)
