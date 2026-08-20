@@ -18,7 +18,7 @@ class ExpenseWorkflowService
             if ($claim->status !== 'pending_manager') {
                 throw new DomainException('Claim is not waiting for manager review.');
             }
-            if ($actor->employee?->id === $claim->employee_id) {
+            if ($this->actorEmployeeId($actor) === (int) $claim->employee_id) {
                 throw new DomainException('Employees cannot approve their own expense.');
             }
             $claim->update([
@@ -39,7 +39,7 @@ class ExpenseWorkflowService
             if ($claim->status !== 'pending_accounting') {
                 throw new DomainException('Claim is not waiting for accounting.');
             }
-            if ($actor->employee?->id === $claim->employee_id) {
+            if ($this->actorEmployeeId($actor) === (int) $claim->employee_id) {
                 throw new DomainException('Employees cannot approve their own expense.');
             }
             $claim->update([
@@ -77,5 +77,20 @@ class ExpenseWorkflowService
         if ($companyId === null || $actor->companyId() !== (int) $companyId) {
             throw new DomainException('The expense claim does not belong to the actor company.');
         }
+    }
+
+    private function actorEmployeeId(User $actor): ?int
+    {
+        $companyId = $actor->companyId();
+        if ($companyId === null) {
+            return null;
+        }
+
+        $employeeId = Employee::query()
+            ->where('company_id', $companyId)
+            ->where('user_id', $actor->id)
+            ->value('id');
+
+        return $employeeId === null ? null : (int) $employeeId;
     }
 }
