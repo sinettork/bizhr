@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\EnsureEmployeeContext;
 use App\Http\Middleware\GuardEmployeeArchiveReadiness;
 use App\Http\Middleware\PreventEmployeeBulkOverwrite;
 use App\Http\Middleware\SecurityHeaders;
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(SecurityHeaders::class);
         $middleware->appendToGroup('web', PreventEmployeeBulkOverwrite::class);
         $middleware->appendToGroup('web', GuardEmployeeArchiveReadiness::class);
+        $middleware->appendToGroup('web', EnsureEmployeeContext::class);
 
         // The TLS reverse proxy must connect to Laravel over loopback.
         $middleware->trustProxies(
