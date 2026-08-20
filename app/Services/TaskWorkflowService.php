@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\Task;
 use App\Models\User;
@@ -26,12 +27,14 @@ class TaskWorkflowService
                 throw new DomainException('A verified or cancelled task cannot be changed.');
             }
 
+            $before = $task->only(['status', 'progress']);
             $task->update([
                 'progress' => $progress,
                 'employee_note' => trim((string) $note) ?: null,
                 'status' => $progress === 100 ? 'waiting_verification' : ($progress > 0 ? 'in_progress' : 'not_started'),
                 'submitted_at' => $progress === 100 ? now() : null,
             ]);
+            AuditLog::record($task, 'progress_updated', $before, $task->only(['status', 'progress']), $actor);
 
             return $task->refresh();
         });
@@ -49,6 +52,7 @@ class TaskWorkflowService
                 throw new DomainException('An employee cannot verify their own task.');
             }
 
+            $before = $task->only(['status', 'progress']);
             $task->update([
                 'status' => $approved ? 'verified' : 'in_progress',
                 'progress' => $approved ? 100 : min(99, $task->progress),
@@ -57,6 +61,13 @@ class TaskWorkflowService
                 'verified_by' => $actor->id,
                 'verified_at' => now(),
             ]);
+            AuditLog::record(
+                $task,
+                $approved ? 'verified' : 'returned_for_revision',
+                $before,
+                $task->only(['status', 'progress', 'verified_by']),
+                $actor,
+            );
 
             return $task->refresh();
         });
@@ -75,12 +86,14 @@ class TaskWorkflowService
                 throw new DomainException('This task cannot be cancelled.');
             }
 
+            $before = $task->only(['status', 'progress']);
             $task->update([
                 'status' => 'cancelled',
                 'cancelled_at' => now(),
                 'cancellation_reason' => trim($reason),
                 'verified_by' => $actor->id,
             ]);
+            AuditLog::record($task, 'cancelled', $before, ['status' => 'cancelled', 'verified_by' => $actor->id], $actor);
 
             return $task->refresh();
         });
