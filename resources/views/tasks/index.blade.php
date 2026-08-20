@@ -15,74 +15,117 @@
                 <button class="btn btn-primary reference-search-button">Filter</button>
             </form>
         </x-slot:filters>
-        <x-slot:actions><x-list-actions :add-modal="auth()->user()->can('task.assign') ? 'createTask' : null" add-label="Assign new task" /></x-slot:actions>
+        <x-slot:actions>
+            <x-list-actions :add-modal="auth()->user()->can('task.assign') ? 'createTask' : null" add-label="Assign new task" />
+        </x-slot:actions>
     </x-workspace-command-bar>
 
-    @if(session('status'))<div class="alert alert-success d-flex align-items-center gap-2"><i class="fa-solid fa-circle-check"></i><span>{{ session('status') }}</span></div>@endif
-    @if($errors->any())<div class="alert alert-danger d-flex align-items-center gap-2"><i class="fa-solid fa-circle-exclamation"></i><span>{{ $errors->first() }}</span></div>@endif
+    @if(session('status'))
+        <div class="alert alert-success d-flex align-items-center gap-2"><i class="fa-solid fa-circle-check"></i><span>{{ session('status') }}</span></div>
+    @endif
+    @if($errors->any())
+        <div class="alert alert-danger d-flex align-items-center gap-2"><i class="fa-solid fa-circle-exclamation"></i><span>{{ $errors->first() }}</span></div>
+    @endif
 
     @php
-        $board = [
-            'not_started' => ['To do', 'fa-circle', 'secondary'],
-            'in_progress' => ['In progress', 'fa-spinner', 'primary'],
-            'waiting_verification' => ['Needs review', 'fa-circle-check', 'warning'],
-            'done' => ['Done', 'fa-check-double', 'success'],
+        $pageTasks = collect($tasks->items());
+        $taskSummary = [
+            ['Open', $pageTasks->whereNotIn('status', ['verified', 'cancelled'])->count()],
+            ['Needs review', $pageTasks->where('status', 'waiting_verification')->count()],
+            ['Overdue', $pageTasks->where('effective_status', 'overdue')->count()],
+            ['Closed', $pageTasks->whereIn('status', ['verified', 'cancelled'])->count()],
         ];
-        $grouped = collect($tasks->items())->groupBy(function ($task) {
-            if(in_array($task->effective_status, ['verified','cancelled'], true)) return 'done';
-            if($task->effective_status === 'overdue') return 'in_progress';
-            return $task->status;
-        });
     @endphp
 
-    <div class="row g-3" data-list-container>
-        @foreach($board as $key => [$label, $icon, $tone])
-            @php($rows = $grouped->get($key, collect()))
-            <div class="col-12 col-xl-3">
-                <section class="profile-card h-100 mb-0">
-                    <div class="profile-card-header">
-                        <h2 class="profile-card-title"><i class="fa-solid {{ $icon }} text-{{ $tone }}"></i><span>{{ $label }}</span></h2>
-                        <span class="small fw-semibold text-body-secondary">{{ $rows->count() }}</span>
-                    </div>
-                    <div class="profile-card-body bg-body-tertiary p-2 d-grid gap-2 align-content-start" style="min-height: 420px;">
-                        @forelse($rows as $task)
-                            <article class="card border-0 shadow-sm">
-                                <div class="card-body p-3">
-                                    <div class="d-flex justify-content-between gap-2 mb-2">
-                                        <div class="fw-semibold text-dark">{{ $task->title }}</div>
-                                        @if($task->priority !== 'low')<span class="small fw-semibold {{ in_array($task->priority,['urgent','high']) ? 'text-danger' : 'text-body-secondary' }}">{{ ucfirst($task->priority) }}</span>@endif
-                                    </div>
-                                    <div class="small text-body-secondary mb-3"><i class="fa-regular fa-user me-1"></i>{{ $task->employee?->getFullName() }}@if($task->employee?->department)<span class="mx-1">·</span>{{ $task->employee->department->name }}@endif</div>
-                                    @if($task->description)<p class="small text-body-secondary mb-3">{{ \Illuminate\Support\Str::limit($task->description, 90) }}</p>@endif
-                                    <div class="d-flex align-items-center gap-2 mb-2"><div class="progress flex-grow-1" style="height:5px"><div class="progress-bar" style="width:{{ max(0,min(100,$task->progress)) }}%"></div></div><span class="small fw-semibold">{{ $task->progress }}%</span></div>
-                                    <div class="d-flex align-items-center justify-content-between gap-2 small">
-                                        <span class="{{ $task->effective_status === 'overdue' ? 'text-danger fw-semibold' : 'text-body-secondary' }}"><i class="fa-regular fa-calendar me-1"></i>{{ $task->due_date->format('d M Y') }}</span>
-                                        <div class="dropdown">
-                                            <button class="btn btn-action-link btn-sm" type="button" data-bs-toggle="dropdown" aria-label="Task actions"><i class="fa-solid fa-ellipsis"></i></button>
-                                            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                                                @if($task->status === 'waiting_verification')
-                                                    <li><form method="POST" action="{{ route('tasks.verify', [$task, 'approve']) }}">@csrf<button class="dropdown-item text-success" type="submit"><i class="fa-solid fa-check me-2"></i>Verify task</button></form></li>
-                                                    <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#returnTask{{ $task->id }}"><i class="fa-solid fa-reply me-2"></i>Return for revision</button></li>
-                                                @endif
-                                                @can('task.assign')
-                                                    @if(!in_array($task->status,['verified','cancelled'],true))
-                                                        <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editTask{{ $task->id }}"><i class="fa-solid fa-pen me-2"></i>Edit</button></li>
-                                                        <li><button class="dropdown-item text-danger" type="button" data-bs-toggle="modal" data-bs-target="#cancelTask{{ $task->id }}"><i class="fa-solid fa-ban me-2"></i>Cancel task</button></li>
-                                                    @endif
-                                                @endcan
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            </article>
-                        @empty
-                            <div class="text-center text-body-secondary py-5 small"><i class="fa-solid {{ $icon }} d-block mb-2"></i>No tasks here.</div>
-                        @endforelse
-                    </div>
-                </section>
+    <div class="workspace-summary" aria-label="Task summary">
+        @foreach($taskSummary as [$label, $value])
+            <div class="workspace-summary-item">
+                <div class="label">{{ $label }}</div>
+                <div class="value">{{ number_format($value) }}</div>
             </div>
         @endforeach
-        <div class="col-12"><x-pagination-footer :paginator="$tasks" /></div>
+    </div>
+
+    <div class="reference-list" data-list-container>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">Task</th>
+                        <th>Assignee</th>
+                        <th>Priority</th>
+                        <th>Due</th>
+                        <th>Progress</th>
+                        <th>Status</th>
+                        <th class="text-end pe-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($tasks as $task)
+                        @php
+                            $statusTone = match($task->effective_status) {
+                                'verified' => 'success',
+                                'overdue' => 'danger',
+                                'waiting_verification' => 'warning',
+                                'in_progress' => 'primary',
+                                default => 'secondary',
+                            };
+                            $priorityTone = match($task->priority) {
+                                'urgent' => 'danger',
+                                'high' => 'warning',
+                                'medium' => 'info',
+                                default => 'secondary',
+                            };
+                        @endphp
+                        <tr>
+                            <td class="ps-3" style="min-width:240px">
+                                <div class="fw-semibold text-dark">{{ $task->title }}</div>
+                                @if($task->description)
+                                    <small class="text-body-secondary">{{ \Illuminate\Support\Str::limit($task->description, 90) }}</small>
+                                @endif
+                                @if($task->manager_note)
+                                    <small class="d-block text-body-secondary mt-1"><i class="fa-regular fa-comment me-1"></i>{{ \Illuminate\Support\Str::limit($task->manager_note, 80) }}</small>
+                                @endif
+                            </td>
+                            <td>
+                                <div>{{ $task->employee?->getFullName() }}</div>
+                                <small class="text-body-secondary">{{ $task->employee?->department?->name ?? '—' }}</small>
+                            </td>
+                            <td><span class="status-text text-bg-{{ $priorityTone }}">{{ ucfirst($task->priority) }}</span></td>
+                            <td class="{{ $task->effective_status === 'overdue' ? 'text-danger fw-semibold' : '' }}">{{ $task->due_date->format('d M Y') }}</td>
+                            <td style="min-width:140px">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="progress flex-grow-1" style="height:5px"><div class="progress-bar" style="width:{{ max(0,min(100,$task->progress)) }}%"></div></div>
+                                    <span class="small fw-semibold">{{ $task->progress }}%</span>
+                                </div>
+                            </td>
+                            <td><span class="status-text text-bg-{{ $statusTone }}">{{ str($task->effective_status)->replace('_',' ')->title() }}</span></td>
+                            <td class="text-end pe-3 text-nowrap">
+                                @if($task->status === 'waiting_verification')
+                                    <form method="POST" action="{{ route('tasks.verify', [$task, 'approve']) }}" class="d-inline" data-confirm="Verify this task as complete?" data-confirm-title="Verify task" data-confirm-action="Verify" data-confirm-tone="primary">
+                                        @csrf
+                                        <button class="btn btn-primary btn-sm" type="submit"><i class="fa-solid fa-check me-1"></i>Verify</button>
+                                    </form>
+                                    <button class="btn btn-action-link btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#returnTask{{ $task->id }}"><i class="fa-solid fa-reply"></i><span>Return</span></button>
+                                @endif
+                                @can('task.assign')
+                                    @if(!in_array($task->status,['verified','cancelled'],true))
+                                        <button class="btn btn-action-link btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#editTask{{ $task->id }}"><i class="fa-solid fa-pen"></i><span>Edit</span></button>
+                                        <button class="btn btn-action-link btn-sm text-danger" type="button" data-bs-toggle="modal" data-bs-target="#cancelTask{{ $task->id }}"><i class="fa-solid fa-ban"></i><span>Cancel</span></button>
+                                    @endif
+                                @endcan
+                                @if(in_array($task->status,['verified','cancelled'],true))
+                                    <span class="small text-body-secondary">Closed</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="7" class="p-0"><x-empty-state class="py-5 px-3" icon="fa-clipboard-check" title="No tasks found" message="No tasks match the current filters." /></td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+        <x-pagination-footer :paginator="$tasks" />
     </div>
 
     @can('task.assign')
