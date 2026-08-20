@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
             url.searchParams.delete('page');
             location.assign(url);
         });
-        list.append(footer);
+        list.appendChild(footer);
     });
 
     const dashboardGrid = document.querySelector('[data-dashboard-grid]');
@@ -258,15 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         dashboardGrid.addEventListener('dragend', () => { dragged?.classList.remove('is-dragging'); dragged = null; });
     }
-
-    document.querySelectorAll('form[data-confirm]').forEach((form) => {
-        form.addEventListener('submit', (event) => {
-            const message = form.dataset.confirm || 'This action cannot be undone. Continue?';
-            if (! window.confirm(message)) {
-                event.preventDefault();
-            }
-        });
-    });
 
     // Print button handler
     document.querySelectorAll('[data-action="print"]').forEach((button) => {
