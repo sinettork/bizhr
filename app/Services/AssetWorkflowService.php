@@ -14,6 +14,10 @@ class AssetWorkflowService
 {
     public function assign(Asset $asset, Employee $employee, User $actor, string $condition, ?string $dueDate): AssetAssignment
     {
+        if ($asset->status !== 'available') {
+            throw new DomainException('Only an available asset can be assigned.');
+        }
+
         $this->assertActorCompany((int) $asset->company_id, $actor);
 
         return DB::transaction(function () use ($asset, $employee, $actor, $condition, $dueDate): AssetAssignment {
@@ -61,6 +65,10 @@ class AssetWorkflowService
 
     public function receive(AssetAssignment $assignment, User $actor, string $condition, ?string $note): AssetAssignment
     {
+        if ($assignment->exists && $assignment->status !== 'assigned') {
+            throw new DomainException('This assignment is already closed.');
+        }
+
         return DB::transaction(function () use ($assignment, $actor, $condition, $note): AssetAssignment {
             $assignment = AssetAssignment::query()->with('asset')->lockForUpdate()->findOrFail($assignment->id);
             $asset = $assignment->asset;
