@@ -36,11 +36,11 @@ class DashboardController extends Controller
         $persona = $this->resolvePersona($user);
 
         $data = match ($persona) {
-            'super-admin' => $this->superAdminDashboard($user, $companyId),
-            'owner' => $this->ownerDashboard($user, $companyId),
-            'hr' => $this->hrDashboard($user, $companyId),
-            'accountant' => $this->accountantDashboard($user, $companyId),
-            'manager' => $this->managerDashboard($user, $companyId, $employee),
+            'super-admin' => $this->superAdminDashboard($companyId),
+            'owner' => $this->ownerDashboard($companyId),
+            'hr' => $this->hrDashboard($companyId),
+            'accountant' => $this->accountantDashboard($companyId),
+            'manager' => $this->managerDashboard($companyId, $employee),
             default => $this->employeeDashboard($companyId, $employee),
         };
 
@@ -114,13 +114,43 @@ class DashboardController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function managerDashboard(User $user, int $companyId, ?Employee $employee): array
+    private function managerDashboard(int $companyId, ?Employee $employee): array
     {
         $departmentId = $employee?->department_id;
+
+        if ($departmentId === null) {
+            $metrics = [
+                'employees' => 0,
+                'scheduled' => 0,
+                'present' => 0,
+                'late' => 0,
+                'leave' => 0,
+                'openCheckouts' => 0,
+                'absent' => 0,
+                'pendingCorrections' => 0,
+                'openTasks' => 0,
+                'waitingVerification' => 0,
+                'pendingLeaveApprovals' => 0,
+                'pendingExpenses' => 0,
+            ];
+
+            return [
+                'metrics' => $metrics,
+                'actionItems' => collect([
+                    $this->actionItem('Leave requests awaiting manager review', 0, 'leave.requests.review', 'fa-calendar-check'),
+                    $this->actionItem('Tasks waiting for verification', 0, 'tasks.index', 'fa-list-check'),
+                    $this->actionItem('Expense claims awaiting manager review', 0, 'expenses.index', 'fa-receipt'),
+                    $this->actionItem('Attendance corrections awaiting review', 0, 'attendance.corrections.review', 'fa-clipboard-check'),
+                ]),
+                'recentAttendances' => collect(),
+                'managerContextMissing' => true,
+            ];
+        }
+
         $metrics = $this->workforceMetrics($companyId, $departmentId);
         $metrics['openTasks'] = $this->taskCount($companyId, $departmentId, fn (Builder $query) => $query->whereNotIn('status', ['verified', 'cancelled']));
         $metrics['waitingVerification'] = $this->taskCount($companyId, $departmentId, fn (Builder $query) => $query->where('status', 'waiting_verification'));
-        $metrics['pendingLeaveApprovals'] = $departmentId === null ? 0 : LeaveRequest::query()
+        $metrics['pendingLeaveApprovals'] = LeaveRequest::query()
             ->where('status', 'pending')
             ->whereHas('employee', fn (Builder $query) => $query
                 ->where('company_id', $companyId)
@@ -129,26 +159,24 @@ class DashboardController extends Controller
         $metrics['pendingExpenses'] = ExpenseClaim::query()
             ->where('company_id', $companyId)
             ->where('status', 'pending_manager')
-            ->when($departmentId !== null, fn (Builder $query) => $query->whereHas('employee', fn (Builder $employeeQuery) => $employeeQuery->where('department_id', $departmentId)))
+            ->whereHas('employee', fn (Builder $query) => $query->where('department_id', $departmentId))
             ->count();
-
-        $actionItems = collect([
-            $this->actionItem('Leave requests awaiting manager review', $metrics['pendingLeaveApprovals'], 'leave.requests.review', 'fa-calendar-check'),
-            $this->actionItem('Tasks waiting for verification', $metrics['waitingVerification'], 'tasks.index', 'fa-list-check'),
-            $this->actionItem('Expense claims awaiting manager review', $metrics['pendingExpenses'], 'expenses.index', 'fa-receipt'),
-            $this->actionItem('Attendance corrections awaiting review', $metrics['pendingCorrections'], 'attendance.corrections.review', 'fa-clipboard-check'),
-        ]);
 
         return [
             'metrics' => $metrics,
-            'actionItems' => $actionItems,
+            'actionItems' => collect([
+                $this->actionItem('Leave requests awaiting manager review', $metrics['pendingLeaveApprovals'], 'leave.requests.review', 'fa-calendar-check'),
+                $this->actionItem('Tasks waiting for verification', $metrics['waitingVerification'], 'tasks.index', 'fa-list-check'),
+                $this->actionItem('Expense claims awaiting manager review', $metrics['pendingExpenses'], 'expenses.index', 'fa-receipt'),
+                $this->actionItem('Attendance corrections awaiting review', $metrics['pendingCorrections'], 'attendance.corrections.review', 'fa-clipboard-check'),
+            ]),
             'recentAttendances' => $this->recentAttendances($companyId, $departmentId),
-            'managerContextMissing' => $departmentId === null,
+            'managerContextMissing' => false,
         ];
     }
 
     /** @return array<string, mixed> */
-    private function hrDashboard(User $user, int $companyId): array
+    private function hrDashboard(int $companyId): array
     {
         $metrics = $this->workforceMetrics($companyId);
         $metrics['pendingLeaveApprovals'] = LeaveRequest::query()
@@ -165,27 +193,21 @@ class DashboardController extends Controller
             ->whereNotNull('end_date')
             ->whereBetween('end_date', [today(), today()->addDays(30)])
             ->count();
-        $metrics['waitingVerification'] = Task::query()
-            ->where('company_id', $companyId)
-            ->where('status', 'waiting_verification')
-            ->count();
-
-        $actionItems = collect([
-            $this->actionItem('Leave requests awaiting final HR approval', $metrics['pendingLeaveApprovals'], 'leave.requests.review', 'fa-calendar-check'),
-            $this->actionItem('Attendance corrections awaiting review', $metrics['pendingCorrections'], 'attendance.corrections.review', 'fa-clipboard-check'),
-            $this->actionItem('Employment contracts awaiting approval', $metrics['pendingContracts'], 'contracts.index', 'fa-file-signature'),
-            $this->actionItem('Contracts expiring within 30 days', $metrics['contractsExpiringSoon'], 'contracts.index', 'fa-hourglass-half'),
-        ]);
 
         return [
             'metrics' => $metrics,
-            'actionItems' => $actionItems,
+            'actionItems' => collect([
+                $this->actionItem('Leave requests awaiting final HR approval', $metrics['pendingLeaveApprovals'], 'leave.requests.review', 'fa-calendar-check'),
+                $this->actionItem('Attendance corrections awaiting review', $metrics['pendingCorrections'], 'attendance.corrections.review', 'fa-clipboard-check'),
+                $this->actionItem('Employment contracts awaiting approval', $metrics['pendingContracts'], 'contracts.index', 'fa-file-signature'),
+                $this->actionItem('Contracts expiring within 30 days', $metrics['contractsExpiringSoon'], 'contracts.index', 'fa-hourglass-half'),
+            ]),
             'recentAttendances' => $this->recentAttendances($companyId),
         ];
     }
 
     /** @return array<string, mixed> */
-    private function accountantDashboard(User $user, int $companyId): array
+    private function accountantDashboard(int $companyId): array
     {
         $metrics = [
             'payrollToProcess' => PayrollPeriod::query()
@@ -227,7 +249,7 @@ class DashboardController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function ownerDashboard(User $user, int $companyId): array
+    private function ownerDashboard(int $companyId): array
     {
         $metrics = $this->workforceMetrics($companyId);
         $metrics['pendingLeaveApprovals'] = LeaveRequest::query()
@@ -247,22 +269,20 @@ class DashboardController extends Controller
             ->whereIn('status', ['pending_manager', 'pending_accounting', 'approved'])
             ->count();
 
-        $actionItems = collect([
-            $this->actionItem('Leave requests awaiting final approval', $metrics['pendingLeaveApprovals'], 'leave.requests.review', 'fa-calendar-check'),
-            $this->actionItem('Payroll periods awaiting approval', $metrics['pendingPayroll'], 'payroll.review', 'fa-file-circle-check'),
-            $this->actionItem('Employment contracts awaiting approval', $metrics['pendingContracts'], 'contracts.index', 'fa-file-signature'),
-            $this->actionItem('Expense claims still in workflow', $metrics['pendingExpenses'], 'expenses.index', 'fa-receipt'),
-        ]);
-
         return [
             'metrics' => $metrics,
-            'actionItems' => $actionItems,
+            'actionItems' => collect([
+                $this->actionItem('Leave requests awaiting final approval', $metrics['pendingLeaveApprovals'], 'leave.requests.review', 'fa-calendar-check'),
+                $this->actionItem('Payroll periods awaiting approval', $metrics['pendingPayroll'], 'payroll.review', 'fa-file-circle-check'),
+                $this->actionItem('Employment contracts awaiting approval', $metrics['pendingContracts'], 'contracts.index', 'fa-file-signature'),
+                $this->actionItem('Expense claims still in workflow', $metrics['pendingExpenses'], 'expenses.index', 'fa-receipt'),
+            ]),
             'recentAttendances' => $this->recentAttendances($companyId),
         ];
     }
 
     /** @return array<string, mixed> */
-    private function superAdminDashboard(User $user, int $companyId): array
+    private function superAdminDashboard(int $companyId): array
     {
         $metrics = [
             'activeEmployees' => Employee::query()->where('company_id', $companyId)->where('is_active', true)->count(),
@@ -338,12 +358,8 @@ class DashboardController extends Controller
     }
 
     /** @param callable(Builder): mixed $constraint */
-    private function taskCount(int $companyId, ?int $departmentId, callable $constraint): int
+    private function taskCount(int $companyId, int $departmentId, callable $constraint): int
     {
-        if ($departmentId === null) {
-            return 0;
-        }
-
         $query = Task::query()
             ->where('company_id', $companyId)
             ->whereHas('employee', fn (Builder $employeeQuery) => $employeeQuery->where('department_id', $departmentId));
