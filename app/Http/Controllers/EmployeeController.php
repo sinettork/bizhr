@@ -10,6 +10,8 @@ use App\Models\EmploymentHistory;
 use App\Models\EmploymentType;
 use App\Models\Position;
 use App\Models\User;
+use App\Services\EmployeeIdCardVerificationService;
+use App\Services\EmployeeLifecycleService;
 use App\Services\UploadedFileSecurityService;
 use BaconQrCode\Renderer\GDLibRenderer;
 use BaconQrCode\Writer;
@@ -19,7 +21,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use RuntimeException;
@@ -148,10 +149,10 @@ class EmployeeController extends Controller
         return view('employees.id-card', compact('employee'));
     }
 
-    public function idCardQr(Request $request, Employee $employee): StreamedResponse
+    public function idCardQr(Request $request, Employee $employee, EmployeeIdCardVerificationService $verification): StreamedResponse
     {
         $this->authorizeEmployee($request, $employee);
-        $token = $this->issueIdCardVerificationToken($employee);
+        $token = $verification->tokenFor($employee);
         $payload = route('employees.id-card.verify', ['employee' => $employee->public_id, 'token' => $token], false);
 
         $renderer = new GDLibRenderer(320);
@@ -161,14 +162,14 @@ class EmployeeController extends Controller
             echo $png;
         }, 200, [
             'Content-Type' => 'image/png',
-            'Cache-Control' => 'public, max-age=300, no-transform',
+            'Cache-Control' => 'private, max-age=300, no-transform',
             'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
-    public function idCardVerify(Employee $employee, string $token): JsonResponse
+    public function idCardVerify(Employee $employee, string $token, EmployeeIdCardVerificationService $verification): JsonResponse
     {
-        abort_unless($employee->is_active && $employee->id_card_verification_revoked_at === null && $employee->id_card_verification_expires_at?->isFuture() && hash_equals((string) $employee->id_card_verification_token_hash, hash('sha256', $token)), 404, 'This ID card cannot be verified.');
+        abort_unless($verification->isValid($employee, $token), 404, 'This ID card cannot be verified.');
 
         return response()->json([
             'valid' => true,
@@ -179,10 +180,17 @@ class EmployeeController extends Controller
         ]);
     }
 
-    public function revokeIdCardVerificationToken(Request $request, Employee $employee): RedirectResponse
+    public function revokeIdCardVerificationToken(Request $request, Employee $employee, EmployeeIdCardVerificationService $verification): RedirectResponse
     {
         $this->authorizeEmployee($request, $employee, true);
-        $employee->update(['id_card_verification_revoked_at' => now()]);
+
+        if ($employee->id_card_verification_revoked_at !== null) {
+            $verification->regenerate($employee, $request->user());
+
+            return back()->with('success', 'A new public ID-card verification token was generated. Older QR codes are no longer valid.');
+        }
+
+        $verification->revoke($employee, $request->user());
 
         return back()->with('success', 'The public ID-card verification token was revoked.');
     }
@@ -226,39 +234,37 @@ class EmployeeController extends Controller
         if ($trackedChanges !== []) {
             $request->validate(['change_reason' => ['required', 'string', 'min:5', 'max:1000'], 'effective_date' => ['required', 'date']]);
         }
+
         DB::transaction(function () use ($employee, $data, $trackedChanges, $request): void {
-            $employee->update($data);
+            $locked = Employee::query()->lockForUpdate()->findOrFail($employee->id);
+            abort_unless((int) $locked->company_id === $this->currentCompanyId($request), 404);
+            $locked->update($data);
+
             if ($trackedChanges !== []) {
                 $event = match (true) {
-                    array_key_exists('employment_status', $trackedChanges) && in_array($employee->employment_status, ['Resigned', 'Terminated', 'Retired'], true) => strtolower($employee->employment_status),
+                    array_key_exists('employment_status', $trackedChanges) && in_array($locked->employment_status, ['Resigned', 'Terminated', 'Retired'], true) => strtolower($locked->employment_status),
                     array_key_exists('branch_id', $trackedChanges) || array_key_exists('department_id', $trackedChanges) => 'transfer',
                     array_key_exists('position_id', $trackedChanges) => 'promotion_or_position_change',
                     array_key_exists('base_salary', $trackedChanges) || array_key_exists('salary_currency', $trackedChanges) => 'salary_change',
                     default => 'employment_change',
                 };
-                $this->recordLifecycleEvent($employee, $event, $request->string('change_reason')->toString(), $request);
+                $this->recordLifecycleEvent($locked, $event, $request->string('change_reason')->toString(), $request);
             }
-            if (in_array($employee->employment_status, ['Resigned', 'Terminated', 'Retired'], true) && $employee->user_id) {
-                DB::table('users')->where('id', $employee->user_id)->update(['is_active' => false, 'updated_at' => now()]);
-                DB::table('sessions')->where('user_id', $employee->user_id)->delete();
+
+            if (in_array($locked->employment_status, ['Resigned', 'Terminated', 'Retired'], true) && $locked->user_id) {
+                DB::table('users')->where('id', $locked->user_id)->update(['is_active' => false, 'updated_at' => now()]);
+                DB::table('sessions')->where('user_id', $locked->user_id)->delete();
             }
         });
 
         return redirect()->route('employees.show', $employee)->with('success', 'Employee updated successfully.');
     }
 
-    public function destroy(Request $request, Employee $employee): RedirectResponse
+    public function destroy(Request $request, Employee $employee, EmployeeLifecycleService $lifecycle): RedirectResponse
     {
         abort_unless((int) $employee->company_id === $this->currentCompanyId($request), 404);
         Gate::forUser($request->user())->authorize('delete', $employee);
-
-        DB::transaction(function () use ($employee): void {
-            if ($employee->user_id) {
-                DB::table('users')->where('id', $employee->user_id)->update(['is_active' => false, 'updated_at' => now()]);
-                DB::table('sessions')->where('user_id', $employee->user_id)->delete();
-            }
-            $employee->delete();
-        });
+        abort_unless($lifecycle->completeSeparation($employee), 422, 'Employee must be fully separated and offboarding-ready before archiving.');
 
         return redirect()->route('employees.index')->with('success', 'Employee archived successfully.');
     }
@@ -266,14 +272,26 @@ class EmployeeController extends Controller
     public function requestRehire(Request $request, Employee $employee): RedirectResponse
     {
         $this->authorizeEmployee($request, $employee, true);
-        abort_unless(in_array($employee->employment_status, ['Resigned', 'Terminated', 'Retired'], true), 422, 'Only separated employees can be rehired.');
-        $data = $request->validate(['effective_date' => ['required', 'date'], 'reason' => ['required', 'string', 'min:15', 'max:1000']]);
-
-        $employee->update([
-            'rehire_requested_at' => now(), 'rehire_requested_by' => $request->user()->id,
-            'rehire_effective_date' => $data['effective_date'], 'rehire_reason' => trim($data['reason']),
-            'rehire_approved_at' => null, 'rehire_approved_by' => null,
+        $data = $request->validate([
+            'effective_date' => ['required', 'date'],
+            'reason' => ['required', 'string', 'min:15', 'max:1000'],
         ]);
+
+        DB::transaction(function () use ($employee, $request, $data): void {
+            $locked = Employee::query()->lockForUpdate()->findOrFail($employee->id);
+            abort_unless((int) $locked->company_id === $this->currentCompanyId($request), 404);
+            abort_unless(in_array($locked->employment_status, ['Resigned', 'Terminated', 'Retired'], true), 422, 'Only separated employees can be rehired.');
+            abort_if($locked->rehire_requested_at !== null && $locked->rehire_approved_at === null, 422, 'A rehire request is already waiting for approval.');
+
+            $locked->update([
+                'rehire_requested_at' => now(),
+                'rehire_requested_by' => $request->user()->id,
+                'rehire_effective_date' => $data['effective_date'],
+                'rehire_reason' => trim($data['reason']),
+                'rehire_approved_at' => null,
+                'rehire_approved_by' => null,
+            ]);
+        });
 
         return back()->with('success', 'Rehire request submitted for approval.');
     }
@@ -281,19 +299,27 @@ class EmployeeController extends Controller
     public function approveRehire(Request $request, Employee $employee): RedirectResponse
     {
         $this->authorizeEmployee($request, $employee, true);
-        abort_unless($employee->rehire_requested_at !== null && $employee->rehire_approved_at === null, 422, 'There is no pending rehire request.');
-        abort_unless($employee->rehire_requested_by !== $request->user()->id, 422, 'The requester cannot approve this rehire.');
 
         DB::transaction(function () use ($employee, $request): void {
-            $employee->update([
-                'employment_status' => 'Active', 'is_active' => true,
-                'rehire_approved_at' => now(), 'rehire_approved_by' => $request->user()->id,
+            $locked = Employee::query()->lockForUpdate()->findOrFail($employee->id);
+            abort_unless((int) $locked->company_id === $this->currentCompanyId($request), 404);
+            abort_unless(in_array($locked->employment_status, ['Resigned', 'Terminated', 'Retired'], true), 422, 'Only separated employees can be rehired.');
+            abort_unless($locked->rehire_requested_at !== null && $locked->rehire_approved_at === null, 422, 'There is no pending rehire request.');
+            abort_unless((int) $locked->rehire_requested_by !== (int) $request->user()->id, 422, 'The requester cannot approve this rehire.');
+
+            $locked->update([
+                'employment_status' => 'Active',
+                'is_active' => true,
+                'rehire_approved_at' => now(),
+                'rehire_approved_by' => $request->user()->id,
             ]);
-            if ($employee->user_id) {
-                DB::table('users')->where('id', $employee->user_id)->update(['is_active' => true, 'updated_at' => now()]);
+
+            if ($locked->user_id) {
+                DB::table('users')->where('id', $locked->user_id)->update(['is_active' => true, 'updated_at' => now()]);
             }
-            $request->merge(['effective_date' => $employee->rehire_effective_date?->toDateString()]);
-            $this->recordLifecycleEvent($employee, 'rehire', 'Approved rehire: '.$employee->rehire_reason, $request);
+
+            $request->merge(['effective_date' => $locked->rehire_effective_date?->toDateString()]);
+            $this->recordLifecycleEvent($locked, 'rehire', 'Approved rehire: '.$locked->rehire_reason, $request);
         });
 
         return back()->with('success', 'Employee rehire approved and activated.');
@@ -398,19 +424,6 @@ class EmployeeController extends Controller
         Gate::forUser($request->user())->authorize($editing ? 'update' : 'view', $employee);
     }
 
-    private function issueIdCardVerificationToken(Employee $employee): string
-    {
-        $expiresAt = $employee->id_card_expiry_date?->copy()->endOfDay() ?? now()->addYear();
-        $token = Str::random(64);
-        $employee->update([
-            'id_card_verification_token_hash' => hash('sha256', $token),
-            'id_card_verification_expires_at' => $expiresAt,
-            'id_card_verification_revoked_at' => null,
-        ]);
-
-        return $token;
-    }
-
     private function deleteProfilePhoto(string $path): void
     {
         if (str_starts_with($path, 'private/')) {
@@ -438,12 +451,19 @@ class EmployeeController extends Controller
 
     private function recordLifecycleEvent(Employee $employee, string $event, string $reason, Request $request): void
     {
+        $employmentTypeName = $employee->employment_type_id
+            ? EmploymentType::query()
+                ->where('company_id', $employee->company_id)
+                ->whereKey($employee->employment_type_id)
+                ->value('name')
+            : null;
+
         EmploymentHistory::query()->create([
             'employee_id' => $employee->id,
             'branch_id' => $employee->branch_id,
             'department_id' => $employee->department_id,
             'position_id' => $employee->position_id,
-            'employment_type' => $employee->employmentType?->name,
+            'employment_type' => $employmentTypeName,
             'event_type' => $event,
             'effective_date' => $request->date('effective_date') ?? $employee->hire_date ?? today(),
             'base_salary' => $employee->base_salary,
