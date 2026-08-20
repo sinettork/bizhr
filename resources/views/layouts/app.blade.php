@@ -4,6 +4,7 @@
 <body class="app-body" hx-history="false">
     @include('partials.navigation')
     <main class="app-workspace px-3 px-lg-4 pt-3 pb-4">{{ $slot }}</main>
+    <x-flash-toasts />
     <x-confirmation-dialog />
     <script nonce="{{ request()->attributes->get('csp_nonce') }}">window.appTablePreferences = @json(auth()->user()?->table_preferences ?? []); window.tablePreferenceUrl = @json(route('preferences.table-columns.update'));</script>
     <script src="{{ asset('vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
@@ -11,6 +12,7 @@
     <script nonce="{{ request()->attributes->get('csp_nonce') }}">htmx.config.historyCacheSize = 0; htmx.config.allowScriptTags = false; htmx.config.selfRequestsOnly = true; htmx.config.timeout = 15000;</script>
     <script src="{{ asset('js/htmx-guard.js') }}"></script>
     <script src="{{ asset('js/confirmation-dialog.js') }}"></script>
+    <script src="{{ asset('js/flash-toasts.js') }}"></script>
     <script src="{{ asset('js/app.js') }}"></script>
     @if(session('open_modal'))<script nonce="{{ request()->attributes->get('csp_nonce') }}">document.addEventListener('DOMContentLoaded', () => bootstrap.Modal.getOrCreateInstance(document.getElementById(@json(session('open_modal')))).show());</script>@endif
     @stack('scripts')
