@@ -32,10 +32,14 @@ class AuditLog extends Model
      * @param  array<string, mixed>  $oldValues
      * @param  array<string, mixed>  $newValues
      */
-    public static function record(Model $record, string $action, array $oldValues, array $newValues): self
-    {
-        /** @var User|null $user */
-        $user = auth()->user();
+    public static function record(
+        Model $record,
+        string $action,
+        array $oldValues,
+        array $newValues,
+        ?User $actor = null,
+    ): self {
+        $user = $actor ?? auth()->user();
         $eventUuid = (string) Str::uuid();
         $payload = [
             'event_uuid' => $eventUuid,
