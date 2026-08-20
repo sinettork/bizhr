@@ -88,3 +88,24 @@ it('blocks approval when payroll locks the attendance before review finishes', f
     expect($correction->fresh()->status)->toBe('pending')
         ->and($this->attendance->fresh()->check_in_at->equalTo($before))->toBeTrue();
 });
+
+it('blocks overtime review when finalized payroll already covers the attendance date', function (): void {
+    $this->attendance->forceFill([
+        'overtime_minutes' => 120,
+        'overtime_approved' => false,
+        'overtime_review_status' => 'pending',
+        'overtime_review_note' => null,
+        'overtime_approved_by' => null,
+        'overtime_approved_at' => null,
+    ])->save();
+    lockPayrollForAttendance($this->attendance, (int) $this->employee->company_id);
+
+    $this->actingAs($this->reviewer)
+        ->post(route('payroll.overtime.review', [$this->attendance, 'approve']))
+        ->assertStatus(423);
+
+    $fresh = $this->attendance->fresh();
+    expect($fresh->overtime_review_status)->toBe('pending')
+        ->and((bool) $fresh->overtime_approved)->toBeFalse()
+        ->and($fresh->overtime_approved_at)->toBeNull();
+});
