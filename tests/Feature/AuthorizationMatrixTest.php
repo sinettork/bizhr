@@ -35,18 +35,14 @@ class AuthorizationMatrixTest extends TestCase
     {
         parent::setUp();
 
-        // Seed permissions and roles first
         $this->seed(DatabaseSeeder::class);
 
-        // Create companies
         $this->company1 = Company::factory()->create(['name' => 'Company 1']);
         $this->company2 = Company::factory()->create(['name' => 'Company 2']);
 
-        // Create employees for company1 and company2
         $this->employee1 = Employee::factory()->create(['company_id' => $this->company1->id]);
         $this->employee2 = Employee::factory()->create(['company_id' => $this->company2->id]);
 
-        // Create users with different roles and link to employees
         $this->admin = User::factory()->create();
         $this->admin->assignRole('Super Admin');
         Employee::factory()->create(['company_id' => $this->company1->id, 'user_id' => $this->admin->id]);
@@ -151,7 +147,11 @@ class AuthorizationMatrixTest extends TestCase
 
     public function test_employee_delete_permission_enforcement(): void
     {
-        $target = Employee::factory()->create(['company_id' => $this->company1->id]);
+        $target = Employee::factory()->create([
+            'company_id' => $this->company1->id,
+            'employment_status' => 'Terminated',
+            'is_active' => false,
+        ]);
 
         $this->actingAs($this->hr);
         $response = $this->delete(route('employees.destroy', $target));
@@ -161,7 +161,7 @@ class AuthorizationMatrixTest extends TestCase
         );
 
         $this->actingAs($this->admin);
-        $this->delete(route('employees.destroy', $target));
+        $this->delete(route('employees.destroy', $target))->assertRedirect(route('employees.index'));
         $this->assertSoftDeleted('employees', ['id' => $target->id]);
     }
 
