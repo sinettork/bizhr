@@ -1,10 +1,18 @@
-<x-layouts::app :title="$employee->full_name_en ?: $employee->employee_code">
+@php($isOwnProfile = $employee->user_id === auth()->id())
+
+<x-layouts::app :title="$isOwnProfile ? 'My Profile' : ($employee->full_name_en ?: $employee->employee_code)">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
         <div>
             <div class="small text-uppercase text-body-secondary fw-semibold">
-                <a href="{{ route('employees.index') }}" class="text-decoration-none text-body-secondary">Employees</a>
-                <span class="mx-1">/</span>
-                <span>Employee Profile</span>
+                @if($isOwnProfile)
+                    <a href="{{ route('dashboard') }}" class="text-decoration-none text-body-secondary">Personal Workspace</a>
+                    <span class="mx-1">/</span>
+                    <span>My Profile</span>
+                @else
+                    <a href="{{ route('employees.index') }}" class="text-decoration-none text-body-secondary">People & Directory</a>
+                    <span class="mx-1">/</span>
+                    <span>Employee Profile</span>
+                @endif
             </div>
             <h1 class="h5 mb-0 fw-bold text-dark">
                 {{ $employee->full_name_en ?: trim($employee->first_name.' '.$employee->last_name) }}
@@ -14,15 +22,15 @@
             </h1>
         </div>
         <div class="d-flex flex-wrap align-items-center gap-2">
-            <a class="btn btn-light btn-sm" href="{{ route('employees.index') }}">
-                <i class="fa-solid fa-arrow-left me-1"></i>Employees
+            <a class="btn btn-light btn-sm" href="{{ $isOwnProfile ? route('dashboard') : route('employees.index') }}">
+                <i class="fa-solid fa-arrow-left me-1"></i>{{ $isOwnProfile ? 'Dashboard' : 'Employees' }}
             </a>
-            <a class="btn btn-outline-primary btn-sm" href="{{ route('employees.id-card', $employee) }}">
-                <i class="fa-solid fa-id-card me-1"></i>ID card
+            <a class="btn btn-action-link btn-sm" href="{{ route('employees.id-card', $employee) }}">
+                <i class="fa-solid fa-id-card"></i><span>ID card</span>
             </a>
             @if(auth()->user()->can('employee.edit') || (auth()->user()->can('employee.edit-own') && $employee->user_id === auth()->id()))
                 <a class="btn btn-primary btn-sm" href="{{ route('employees.edit', $employee) }}">
-                    <i class="fa-solid fa-pen me-1"></i>Edit profile
+                    <i class="fa-solid fa-pen me-1"></i>{{ $isOwnProfile ? 'Edit my profile' : 'Edit profile' }}
                 </a>
             @endif
         </div>
