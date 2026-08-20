@@ -9,8 +9,32 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureEmployeeContext
 {
+    /** @var list<string> */
+    private const SELF_SERVICE_ROUTES = [
+        'leave.requests.index',
+        'leave.requests.store',
+        'leave.requests.withdraw',
+        'payroll.my-payslips',
+        'performance.my-goals',
+        'performance.my-goals.update',
+        'performance.my-reviews',
+        'performance.my-reviews.acknowledge',
+        'tasks.mine',
+        'tasks.progress',
+        'training.mine',
+        'training.progress',
+        'assets.mine',
+        'expenses.mine',
+        'expenses.store',
+        'contracts.mine',
+    ];
+
     public function handle(Request $request, Closure $next): Response
     {
+        if (! in_array($request->route()?->getName(), self::SELF_SERVICE_ROUTES, true)) {
+            return $next($request);
+        }
+
         $user = $request->user();
         abort_unless($user !== null, 401);
 
