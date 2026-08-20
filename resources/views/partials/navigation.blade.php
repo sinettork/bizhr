@@ -11,6 +11,16 @@
     $checkAttendance = $can('attendance.checkin') || $can('attendance.checkout');
     $manageAttendance = $can('attendance.approve') || $can('attendance.report');
 
+    $isPureSuperAdmin = (bool) $user?->hasRole('Super Admin')
+        && $user?->roles()->where('name', '!=', 'Super Admin')->doesntExist();
+    $hasEmployeeContext = $user?->companyId() !== null
+        && $user?->employee()
+            ->where('company_id', $user->companyId())
+            ->where('is_active', true)
+            ->whereNotIn('employment_status', ['Resigned', 'Terminated', 'Retired'])
+            ->exists();
+    $showPersonalWorkspace = ! $isPureSuperAdmin && $hasEmployeeContext;
+
     $groups = array_filter([
         ['People', 'fa-users', [
             $item('Employees', 'fa-users', 'employees.index', 'employees.*', $can('employee.view')),
@@ -65,7 +75,7 @@
         ]],
     ], fn (array $group) => count(array_filter($group[2])) > 0);
 
-    $personalItems = array_values(array_filter([
+    $personalItems = $showPersonalWorkspace ? array_values(array_filter([
         $item('My attendance', 'fa-user-clock', 'attendance.checkinout', 'attendance.checkinout', $checkAttendance),
         $item('My leave', 'fa-calendar-check', 'leave.requests.index', 'leave.requests.index', $can('leave.request')),
         $item('My payslips', 'fa-wallet', 'payroll.my-payslips', 'payroll.my-payslips', $can('payroll.view-own')),
@@ -77,7 +87,7 @@
         $item('My expenses', 'fa-money-bill-wave', 'expenses.mine', 'expenses.mine', $can('expense.view-own')),
         $item('My contracts', 'fa-file-lines', 'contracts.mine', 'contracts.mine', $can('contract.view-own')),
         $item('Announcements', 'fa-bullhorn', 'announcements.feed', 'announcements.feed', $can('announcement.view')),
-    ]));
+    ])) : [];
 @endphp
 
 <header class="navbar app-navbar app-topbar sticky-top">
