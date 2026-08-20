@@ -13,6 +13,7 @@ use App\Services\PayrollCalculatorService;
 use App\Services\PayrollWorkflowService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -163,10 +164,32 @@ class PayrollController extends Controller
     public function reviewOvertime(Request $request, Attendance $attendance, string $decision): RedirectResponse
     {
         abort_unless(in_array($decision, ['approve', 'reject'], true), 404);
-        abort_unless($attendance->employee()->where('company_id', $this->companyId())->exists(), 404);
+        $companyId = $this->companyId();
+        abort_unless($attendance->employee()->where('company_id', $companyId)->exists(), 404);
         Gate::forUser($request->user())->authorize('reviewOvertime', $attendance);
         $data = $request->validate(['note' => [$decision === 'reject' ? 'required' : 'nullable', 'string', 'min:3', 'max:1000']]);
-        $attendance->forceFill(['overtime_approved' => $decision === 'approve', 'overtime_review_status' => $decision === 'approve' ? 'approved' : 'rejected', 'overtime_review_note' => $data['note'] ?? null, 'overtime_approved_by' => $request->user()->id, 'overtime_approved_at' => now()])->save();
+
+        DB::transaction(function () use ($attendance, $companyId, $decision, $data, $request): void {
+            $lockedAttendance = Attendance::query()->whereKey($attendance->id)->lockForUpdate()->firstOrFail();
+            abort_unless($lockedAttendance->employee()->where('company_id', $companyId)->exists(), 404);
+
+            $payrollLocked = PayrollPeriod::query()
+                ->where('company_id', $companyId)
+                ->whereDate('start_date', '<=', $lockedAttendance->work_date)
+                ->whereDate('end_date', '>=', $lockedAttendance->work_date)
+                ->whereIn('status', ['approved', 'paid', 'closed'])
+                ->exists();
+
+            abort_if($payrollLocked, 423, 'Overtime review is locked because this attendance date is already covered by finalized payroll.');
+
+            $lockedAttendance->forceFill([
+                'overtime_approved' => $decision === 'approve',
+                'overtime_review_status' => $decision === 'approve' ? 'approved' : 'rejected',
+                'overtime_review_note' => $data['note'] ?? null,
+                'overtime_approved_by' => $request->user()->id,
+                'overtime_approved_at' => now(),
+            ])->save();
+        });
 
         return back()->with('status', 'Overtime '.$decision.'d. Re-generate a draft payroll period to include the change.');
     }
