@@ -33,6 +33,20 @@ it('renders workspace context and uses one modal confirmation flow', function ()
         ->and($confirmationJs)->not->toContain('nativeConfirm');
 });
 
+it('uses compact shared toasts for transient action feedback', function (): void {
+    $layout = file_get_contents(resource_path('views/layouts/app.blade.php'));
+    $toast = file_get_contents(resource_path('views/components/flash-toasts.blade.php'));
+    $toastCss = file_get_contents(public_path('css/flash-toast.css'));
+    $taskController = file_get_contents(app_path('Http/Controllers/TaskController.php'));
+
+    expect($layout)->toContain('<x-flash-toasts />')
+        ->and($toast)->toContain("session('action_feedback')")
+        ->and($toast)->not->toContain("session('success')")
+        ->and($toastCss)->toContain('.app-action-toast')
+        ->and($taskController)->toContain("with('action_feedback', 'Task progress updated.')")
+        ->and($taskController)->not->toContain("with('status', 'Task progress updated.')");
+});
+
 it('keeps employee profile navigation aware of self service context', function (): void {
     $profile = file_get_contents(resource_path('views/employees/show.blade.php'));
 
