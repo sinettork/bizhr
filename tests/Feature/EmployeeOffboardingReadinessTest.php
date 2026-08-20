@@ -3,9 +3,11 @@
 use App\Models\Employee;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\EmployeeLifecycleService;
 use App\Services\EmployeeOffboardingReadinessService;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\DemoDataSeeder;
+use DomainException;
 
 beforeEach(function (): void {
     $this->seed([DatabaseSeeder::class, DemoDataSeeder::class]);
@@ -56,4 +58,24 @@ it('shows the readiness checklist on employee edit pages', function (): void {
         ->assertSee('Assigned assets')
         ->assertSee('Unsettled expenses')
         ->assertSee('Unpaid payroll items');
+});
+
+it('blocks final archive while offboarding still has outstanding work', function (): void {
+    Task::query()->create([
+        'company_id' => $this->employee->company_id,
+        'assigned_by' => User::query()->where('email', 'manager@bizhr.local')->value('id') ?? $this->employeeUser->id,
+        'assigned_to' => $this->employee->id,
+        'title' => 'Final handover task',
+        'priority' => 'high',
+        'start_date' => today(),
+        'due_date' => today()->addDay(),
+        'status' => 'in_progress',
+        'progress' => 10,
+    ]);
+    $this->employee->update(['employment_status' => 'Resigned', 'is_active' => false]);
+
+    expect(fn () => app(EmployeeLifecycleService::class)->completeSeparation($this->employee->fresh()))
+        ->toThrow(DomainException::class, 'Employee offboarding still has');
+
+    expect(Employee::withTrashed()->find($this->employee->id)?->trashed())->toBeFalse();
 });
