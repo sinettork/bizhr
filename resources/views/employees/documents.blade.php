@@ -58,13 +58,13 @@
                                     {{ str($document->status)->replace('_', ' ')->title() }}
                                 </span>
                             </td>
-                            <td class="text-end pe-3">
+                            <td class="text-end pe-3 text-nowrap">
                                 <a class="btn btn-action-link btn-sm" href="{{ route('employees.documents.download', [$employee, $document]) }}">
                                     <i class="fa-solid fa-download"></i><span>Download</span>
                                 </a>
                                 @can('employee.view-sensitive')
                                     @if($document->status === 'pending_verification')
-                                        <form class="d-inline" method="POST" action="{{ route('employees.documents.verify', [$employee, $document]) }}">
+                                        <form class="d-inline" method="POST" action="{{ route('employees.documents.verify', [$employee, $document]) }}" data-confirm="Verify this employee document? Verified documents become part of the protected audit history and must be revoked instead of deleted." data-confirm-title="Verify employee document" data-confirm-action="Verify document" data-confirm-tone="primary">
                                             @csrf
                                             <button class="btn btn-action-link btn-sm" type="submit">
                                                 <i class="fa-solid fa-circle-check"></i><span>Verify</span>
@@ -78,7 +78,7 @@
                                 @endcan
                                 @canany(['employee.edit', 'employee.edit-own'])
                                     @if($document->status === 'pending_verification')
-                                        <form class="d-inline" method="POST" action="{{ route('employees.documents.destroy', [$employee, $document]) }}" data-confirm="Remove this unverified document?">
+                                        <form class="d-inline" method="POST" action="{{ route('employees.documents.destroy', [$employee, $document]) }}" data-confirm="Remove this unverified document? The stored file will be deleted and this action cannot be undone." data-confirm-title="Remove unverified document" data-confirm-action="Remove document" data-confirm-tone="danger">
                                             @csrf
                                             @method('DELETE')
                                             <button class="btn btn-action-link btn-sm text-danger" type="submit">
@@ -90,7 +90,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="text-center text-body-secondary py-5">No documents have been uploaded.</td></tr>
+                        <tr><td colspan="7" class="p-0"><x-empty-state class="py-5 px-3" icon="fa-folder-open" title="No employee documents" message="Uploaded employee documents and verification history will appear here." /></td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -131,10 +131,10 @@
                         @csrf
                         <div class="modal-header"><h2 class="modal-title fs-5">Revoke document</h2><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div>
                         <div class="modal-body">
-                            <p class="mb-3">The file will be retained for audit history.</p>
-                            <label class="form-label">Revocation reason <span class="text-danger">*</span></label><textarea class="form-control" name="reason" minlength="5" required></textarea>
+                            <p class="small text-body-secondary mb-3">The file will be retained for audit history and the revocation reason will be recorded.</p>
+                            <label class="form-label">Revocation reason <span class="text-danger">*</span></label><textarea class="form-control" name="reason" minlength="5" maxlength="1000" rows="3" required></textarea>
                         </div>
-                        <div class="modal-footer"><button class="btn btn-light" type="button" data-bs-dismiss="modal">Close</button><button class="btn btn-danger" type="submit">Revoke document</button></div>
+                        <div class="modal-footer"><button class="btn btn-light" type="button" data-bs-dismiss="modal">Keep verified</button><button class="btn btn-danger" type="submit">Revoke document</button></div>
                     </form>
                 </div>
             </div>
