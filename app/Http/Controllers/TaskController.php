@@ -83,7 +83,7 @@ class TaskController extends Controller
         ]);
         $employee = Employee::query()->whereKey($data['assigned_to'])->where('company_id', $companyId)->where('is_active', true)->firstOrFail();
         Task::query()->create(['company_id' => $companyId, 'assigned_by' => $request->user()->id, ...$data, 'assigned_to' => $employee->id]);
-        $response = back()->with('status', 'Task assigned.');
+        $response = back()->with('action_feedback', 'Task assigned.');
 
         return $request->input('save_action') === 'new' ? $response->with('open_modal', 'createTask') : $response;
     }
@@ -101,7 +101,7 @@ class TaskController extends Controller
         $data = $request->validate(['progress' => ['required', 'integer', 'between:0,100'], 'employee_note' => ['nullable', 'string', 'max:2000']]);
         $this->runWorkflow(fn () => $workflow->updateProgress($task, $request->user(), $data['progress'], $data['employee_note'] ?? null));
 
-        return back()->with('status', 'Task progress updated.');
+        return back()->with('action_feedback', 'Task progress updated.');
     }
 
     public function verify(Request $request, Task $task, TaskWorkflowService $workflow, string $decision): RedirectResponse
@@ -111,7 +111,7 @@ class TaskController extends Controller
         $data = $request->validate(['manager_note' => [$decision === 'return' ? 'required' : 'nullable', 'string', 'min:3', 'max:2000']]);
         $this->runWorkflow(fn () => $workflow->verify($task, $request->user(), $decision === 'approve', $data['manager_note'] ?? null));
 
-        return back()->with('status', $decision === 'approve' ? 'Task verified.' : 'Task returned to employee.');
+        return back()->with('action_feedback', $decision === 'approve' ? 'Task verified.' : 'Task returned to employee.');
     }
 
     public function update(Request $request, Task $task): RedirectResponse
@@ -130,7 +130,7 @@ class TaskController extends Controller
         abort_unless(Employee::query()->whereKey($data['assigned_to'])->where('company_id', $companyId)->where('is_active', true)->exists(), 404);
         $task->update($data);
 
-        return back()->with('status', 'Task updated.');
+        return back()->with('action_feedback', 'Task updated.');
     }
 
     public function cancel(Request $request, Task $task, TaskWorkflowService $workflow): RedirectResponse
@@ -139,7 +139,7 @@ class TaskController extends Controller
         $reason = (string) $request->validate(['reason' => ['required', 'string', 'min:10', 'max:2000']])['reason'];
         $this->runWorkflow(fn () => $workflow->cancel($task, $request->user(), $reason));
 
-        return back()->with('status', 'Task cancelled with a retained reason.');
+        return back()->with('action_feedback', 'Task cancelled with a retained reason.');
     }
 
     /** @param callable(): mixed $operation */
