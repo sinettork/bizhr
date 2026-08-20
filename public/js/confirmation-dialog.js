@@ -1,19 +1,4 @@
 (() => {
-    const nativeConfirm = window.confirm.bind(window);
-    let allowLegacyConfirmOnce = false;
-
-    // Keep legacy form listeners working while the application migrates away
-    // from browser-native confirm dialogs. A confirmed BizHR modal submission
-    // is allowed through the old listener exactly once.
-    window.confirm = (message) => {
-        if (allowLegacyConfirmOnce) {
-            allowLegacyConfirmOnce = false;
-            return true;
-        }
-
-        return nativeConfirm(message);
-    };
-
     document.addEventListener('DOMContentLoaded', () => {
         const dialog = document.querySelector('[data-app-confirm-dialog]');
         if (! dialog || ! window.bootstrap?.Modal) return;
@@ -115,7 +100,6 @@
             pendingForm = null;
             pendingSubmitter = null;
             approvedForms.add(form);
-            allowLegacyConfirmOnce = true;
             modal.hide();
 
             if (submitter instanceof HTMLElement && typeof form.requestSubmit === 'function') {
