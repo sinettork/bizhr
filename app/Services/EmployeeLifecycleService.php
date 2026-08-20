@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\EmploymentHistory;
+use DomainException;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -11,6 +12,10 @@ use Illuminate\Support\Facades\DB;
 
 class EmployeeLifecycleService
 {
+    public function __construct(
+        private readonly EmployeeOffboardingReadinessService $offboardingReadiness,
+    ) {}
+
     /** @param array<string, mixed>|null $changes */
     public function recordStatusChange(
         Employee $employee,
@@ -268,6 +273,13 @@ class EmployeeLifecycleService
     {
         if (! in_array($employee->employment_status, ['Resigned', 'Terminated', 'Retired'], true)) {
             return false;
+        }
+
+        $readiness = $this->offboardingReadiness->forEmployee($employee);
+        if (! $readiness['ready']) {
+            throw new DomainException(
+                'Employee offboarding still has '.$readiness['outstanding'].' outstanding area'.($readiness['outstanding'] === 1 ? '' : 's').'. Resolve the readiness checklist before archiving the employee record.'
+            );
         }
 
         DB::transaction(function () use ($employee): void {
