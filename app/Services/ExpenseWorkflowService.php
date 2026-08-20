@@ -23,7 +23,8 @@ class ExpenseWorkflowService
             }
             $claim->update([
                 'status' => $approved ? 'pending_accounting' : 'rejected',
-                'manager_id' => $actor->id, 'manager_reviewed_at' => now(),
+                'manager_id' => $actor->id,
+                'manager_reviewed_at' => now(),
                 'review_note' => trim($note),
             ]);
 
@@ -44,7 +45,8 @@ class ExpenseWorkflowService
             }
             $claim->update([
                 'status' => $approved ? 'approved' : 'rejected',
-                'accountant_id' => $actor->id, 'accountant_reviewed_at' => now(),
+                'accountant_id' => $actor->id,
+                'accountant_reviewed_at' => now(),
                 'review_note' => trim($note),
             ]);
 
@@ -54,7 +56,7 @@ class ExpenseWorkflowService
 
     public function markPaid(ExpenseClaim $claim, User $actor, string $reference): ExpenseClaim
     {
-        if ($claim->status !== 'approved' || mb_strlen(trim($reference)) < 3) {
+        if (mb_strlen(trim($reference)) < 3) {
             throw new DomainException('Only an approved claim with a payment reference can be paid.');
         }
 
@@ -64,7 +66,12 @@ class ExpenseWorkflowService
             if ($claim->status !== 'approved') {
                 throw new DomainException('Only an approved claim with a payment reference can be paid.');
             }
-            $claim->update(['status' => 'paid', 'paid_at' => now(), 'accountant_id' => $actor->id, 'payment_reference' => trim($reference)]);
+            $claim->update([
+                'status' => 'paid',
+                'paid_at' => now(),
+                'accountant_id' => $actor->id,
+                'payment_reference' => trim($reference),
+            ]);
 
             return $claim->refresh();
         });
@@ -72,9 +79,15 @@ class ExpenseWorkflowService
 
     private function assertSameCompany(ExpenseClaim $claim, User $actor): void
     {
-        $companyId = Employee::query()->whereKey($claim->employee_id)->value('company_id');
+        $actorCompanyId = $actor->companyId();
+        $employeeCompanyId = Employee::query()->whereKey($claim->employee_id)->value('company_id');
 
-        if ($companyId === null || $actor->companyId() !== (int) $companyId) {
+        if (
+            $actorCompanyId === null
+            || (int) $claim->company_id !== $actorCompanyId
+            || $employeeCompanyId === null
+            || (int) $employeeCompanyId !== (int) $claim->company_id
+        ) {
             throw new DomainException('The expense claim does not belong to the actor company.');
         }
     }
