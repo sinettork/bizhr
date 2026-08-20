@@ -26,56 +26,41 @@
             $paymentTone = $latestPayslip->payment_status === 'paid' ? 'success' : 'warning';
         @endphp
 
-        <div class="row g-3 mb-3">
-            <div class="col-12 col-xl-5">
-                <section class="profile-card h-100 mb-0">
-                    <div class="profile-card-header">
-                        <div>
-                            <div class="small text-body-secondary">Latest payslip</div>
-                            <h2 class="profile-card-title mb-0"><i class="fa-solid fa-money-check-dollar text-primary"></i><span>{{ $latestPayslip->period?->name ?? 'Payroll period' }}</span></h2>
-                        </div>
-                        <span class="status-text text-bg-{{ $paymentTone }}">{{ str($latestPayslip->payment_status)->replace('_', ' ')->title() }}</span>
-                    </div>
-                    <div class="profile-card-body">
-                        <div class="small text-body-secondary">Net pay</div>
-                        <div class="display-6 fw-bold text-dark mt-1">{{ $money($latestPayslip->net_salary, $latestPayslip->currency) }}</div>
-                        <div class="small text-body-secondary mt-2">
-                            {{ $latestPayslip->period?->start_date?->format('d M Y') }} – {{ $latestPayslip->period?->end_date?->format('d M Y') }}
-                        </div>
-                        <div class="alert alert-light border small mt-3 mb-0">
-                            @if($latestPayslip->payment_status === 'paid')
-                                <i class="fa-solid fa-circle-check text-success me-1"></i>Your payroll has been marked paid for this period.
-                            @else
-                                <i class="fa-solid fa-clock text-warning me-1"></i>This payslip is approved but payment has not yet been marked paid.
-                            @endif
-                        </div>
-                    </div>
-                </section>
+        <div class="reference-list mb-3" aria-label="Latest payslip summary">
+            <div class="reference-list-toolbar">
+                <div>
+                    <div class="small text-uppercase text-body-secondary fw-semibold">Latest payslip</div>
+                    <div class="fw-semibold text-dark">{{ $latestPayslip->period?->name ?? 'Payroll period' }}</div>
+                    <div class="small text-body-secondary">{{ $latestPayslip->period?->start_date?->format('d M Y') }} – {{ $latestPayslip->period?->end_date?->format('d M Y') }}</div>
+                </div>
+                <span class="status-text text-bg-{{ $paymentTone }}">{{ str($latestPayslip->payment_status)->replace('_', ' ')->title() }}</span>
             </div>
 
-            <div class="col-12 col-xl-7">
-                <div class="row g-2 h-100">
-                    @foreach([
-                        ['Base pay', $money($latestPayslip->base_salary, $latestPayslip->currency), 'fa-coins', 'primary'],
-                        ['Overtime', number_format((float) $latestPayslip->overtime_hours, 2).' h', 'fa-clock', 'info'],
-                        ['Tax & deductions', $money($latestDeductions, $latestPayslip->currency), 'fa-receipt', 'warning'],
-                        ['Payslips available', number_format($items->total()), 'fa-file-invoice-dollar', 'secondary'],
-                    ] as [$label, $value, $icon, $tone])
-                        <div class="col-6">
-                            <section class="profile-card h-100 mb-0">
-                                <div class="profile-card-body py-3">
-                                    <div class="d-flex align-items-center gap-3">
-                                        <span class="metric-icon bg-{{ $tone }}-subtle text-{{ $tone }}"><i class="fa-solid {{ $icon }}"></i></span>
-                                        <div class="min-w-0">
-                                            <div class="small text-body-secondary">{{ $label }}</div>
-                                            <div class="fw-bold text-dark text-truncate">{{ $value }}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </section>
-                        </div>
-                    @endforeach
+            <div class="workspace-summary m-0 p-2">
+                <div class="workspace-summary-item">
+                    <div class="label">Net pay</div>
+                    <div class="value">{{ $money($latestPayslip->net_salary, $latestPayslip->currency) }}</div>
                 </div>
+                <div class="workspace-summary-item">
+                    <div class="label">Base pay</div>
+                    <div class="value">{{ $money($latestPayslip->base_salary, $latestPayslip->currency) }}</div>
+                </div>
+                <div class="workspace-summary-item">
+                    <div class="label">Overtime</div>
+                    <div class="value">{{ number_format((float) $latestPayslip->overtime_hours, 2) }} h</div>
+                </div>
+                <div class="workspace-summary-item">
+                    <div class="label">Tax & deductions</div>
+                    <div class="value">{{ $money($latestDeductions, $latestPayslip->currency) }}</div>
+                </div>
+            </div>
+
+            <div class="px-3 py-2 border-top small text-body-secondary">
+                @if($latestPayslip->payment_status === 'paid')
+                    Payroll has been marked paid for this period.
+                @else
+                    This payslip is approved and waiting for payment to be marked paid.
+                @endif
             </div>
         </div>
     @endif
@@ -118,7 +103,7 @@
                             <td>{{ $money($item->base_salary, $item->currency) }}</td>
                             <td>{{ number_format((float) $item->overtime_hours, 2) }} h</td>
                             <td>{{ $money($deductions, $item->currency) }}</td>
-                            <td class="fw-bold text-dark">{{ $money($item->net_salary, $item->currency) }}</td>
+                            <td class="fw-semibold text-dark">{{ $money($item->net_salary, $item->currency) }}</td>
                             <td class="pe-3">
                                 <span class="badge text-bg-{{ $item->payment_status === 'paid' ? 'success' : 'warning' }}">{{ str($item->payment_status)->replace('_', ' ')->title() }}</span>
                             </td>
