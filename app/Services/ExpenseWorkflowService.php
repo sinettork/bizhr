@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Models\ExpenseClaim;
 use App\Models\User;
@@ -21,12 +22,20 @@ class ExpenseWorkflowService
             if ($this->actorEmployeeId($actor) === (int) $claim->employee_id) {
                 throw new DomainException('Employees cannot approve their own expense.');
             }
+            $before = $claim->only(['status', 'manager_id']);
             $claim->update([
                 'status' => $approved ? 'pending_accounting' : 'rejected',
                 'manager_id' => $actor->id,
                 'manager_reviewed_at' => now(),
                 'review_note' => trim($note),
             ]);
+            AuditLog::record(
+                $claim,
+                $approved ? 'manager_approved' : 'manager_rejected',
+                $before,
+                $claim->only(['status', 'manager_id']),
+                $actor,
+            );
 
             return $claim->refresh();
         });
@@ -43,12 +52,20 @@ class ExpenseWorkflowService
             if ($this->actorEmployeeId($actor) === (int) $claim->employee_id) {
                 throw new DomainException('Employees cannot approve their own expense.');
             }
+            $before = $claim->only(['status', 'accountant_id']);
             $claim->update([
                 'status' => $approved ? 'approved' : 'rejected',
                 'accountant_id' => $actor->id,
                 'accountant_reviewed_at' => now(),
                 'review_note' => trim($note),
             ]);
+            AuditLog::record(
+                $claim,
+                $approved ? 'accounting_approved' : 'accounting_rejected',
+                $before,
+                $claim->only(['status', 'accountant_id']),
+                $actor,
+            );
 
             return $claim->refresh();
         });
@@ -66,12 +83,20 @@ class ExpenseWorkflowService
             if ($claim->status !== 'approved') {
                 throw new DomainException('Only an approved claim with a payment reference can be paid.');
             }
+            $before = $claim->only(['status', 'accountant_id']);
             $claim->update([
                 'status' => 'paid',
                 'paid_at' => now(),
                 'accountant_id' => $actor->id,
                 'payment_reference' => trim($reference),
             ]);
+            AuditLog::record(
+                $claim,
+                'paid',
+                $before,
+                $claim->only(['status', 'accountant_id', 'paid_at']),
+                $actor,
+            );
 
             return $claim->refresh();
         });
