@@ -9,7 +9,7 @@ use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\DemoDataSeeder;
 use Illuminate\Support\Facades\DB;
 
-it('lets an owner create, update, and archive an employee', function () {
+it('lets an owner create, update, separate, and archive an employee', function () {
     $this->seed([DatabaseSeeder::class, DemoDataSeeder::class]);
 
     $owner = User::query()->where('email', 'demo.owner@bizhr.local')->firstOrFail();
@@ -49,6 +49,17 @@ it('lets an owner create, update, and archive an employee', function () {
 
     expect($employee->fresh()->employment_status)->toBe('On probation')
         ->and(EmploymentHistory::query()->where('employee_id', $employee->id)->where('event_type', 'employment_change')->exists())->toBeTrue();
+
+    $this->actingAs($owner)->put(route('employees.update', $employee), [
+        ...$payload,
+        'full_name_en' => 'Updated Employee',
+        'employment_status' => 'Terminated',
+        'is_active' => '0',
+        'effective_date' => now()->toDateString(),
+        'change_reason' => 'Employee completed the approved separation workflow before archive.',
+    ])->assertRedirect(route('employees.show', $employee));
+
+    expect($employee->fresh()->employment_status)->toBe('Terminated');
 
     $this->actingAs($owner)->delete(route('employees.destroy', $employee))
         ->assertRedirect(route('employees.index'));
