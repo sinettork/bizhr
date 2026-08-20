@@ -4,6 +4,10 @@
         <a class="btn btn-light" href="{{ route('employees.index') }}"><i class="fa-solid fa-arrow-left me-1"></i>Back to employees</a>
     </div>
 
+    @if($employee->exists)
+        <x-employee-offboarding-readiness :employee="$employee" />
+    @endif
+
     <form method="POST" enctype="multipart/form-data" action="{{ $employee->exists ? route('employees.update', $employee) : route('employees.store') }}">
         @csrf
         @if($employee->exists) @method('PUT') @endif
