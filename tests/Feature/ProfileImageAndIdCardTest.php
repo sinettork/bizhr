@@ -2,6 +2,7 @@
 
 use App\Models\Employee;
 use App\Models\User;
+use App\Services\EmployeeIdCardVerificationService;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\DemoDataSeeder;
 use Illuminate\Http\UploadedFile;
@@ -109,12 +110,8 @@ it('does not expose an employee photo to an unrelated account', function () {
 
 it('verifies a current ID card publicly without exposing employee PII', function () {
     $employee = Employee::query()->where('is_active', true)->firstOrFail();
-    $token = str_repeat('V', 64);
-    $employee->update([
-        'id_card_verification_token_hash' => hash('sha256', $token),
-        'id_card_verification_expires_at' => now()->addDay(),
-        'id_card_verification_revoked_at' => null,
-    ]);
+    $service = app(EmployeeIdCardVerificationService::class);
+    $token = $service->tokenFor($employee);
 
     $this->get(route('employees.id-card.verify', [$employee, $token]))
         ->assertOk()
@@ -122,7 +119,7 @@ it('verifies a current ID card publicly without exposing employee PII', function
         ->assertJsonPath('employee_code', $employee->employee_code)
         ->assertJsonMissing(['name' => $employee->getFullName(), 'employee_id' => $employee->id]);
 
-    $employee->update(['id_card_verification_revoked_at' => now()]);
+    $service->revoke($employee->refresh(), $this->owner);
 
     $this->get(route('employees.id-card.verify', [$employee, $token]))->assertNotFound();
 });
