@@ -39,7 +39,7 @@ class DemoDataSeeder extends Seeder
             );
 
             $shiftId = $this->seedShift($companyId);
-            $this->seedSchedulesAndAttendance($shiftId, $employees);
+            $this->seedSchedulesAndAttendance($shiftId, $employees, $users);
             $this->seedPayroll($companyId, $employees, $users);
             $this->seedLeave($companyId, $employees, $users);
             $this->seedContracts($companyId, $employees, $users);
@@ -312,14 +312,23 @@ class DemoDataSeeder extends Seeder
     }
 
     /** @param array<string, int> $employees */
-    private function seedSchedulesAndAttendance(int $shiftId, array $employees): void
+    /**
+     * @param  array<string, int>  $employees
+     * @param  array<string, int>  $users
+     */
+    private function seedSchedulesAndAttendance(int $shiftId, array $employees, array $users): void
     {
         if (! Schema::hasTable('employee_schedules') || ! Schema::hasTable('attendances')) {
             return;
         }
-        foreach (array_values($employees) as $employeeIndex => $employeeId) {
+        foreach ($employees as $employeeKey => $employeeId) {
             $branchId = (int) DB::table('employees')->where('id', $employeeId)->value('branch_id');
-            for ($offset = 28; $offset >= 1; $offset--) {
+            for ($offset = 28; $offset >= 0; $offset--) {
+                // Preserve clean slate for hr (EMP-001) & employee1 (EMP-004) on today for feature tests
+                if ($offset === 0 && in_array($employeeKey, ['hr', 'employee1'], true)) {
+                    continue;
+                }
+
                 $date = today()->subDays($offset);
                 $isRest = $date->isSunday();
                 $this->upsertId('employee_schedules', [
@@ -335,13 +344,47 @@ class DemoDataSeeder extends Seeder
                     continue;
                 }
 
-                $late = (($offset + $employeeIndex) % 7 === 0) ? 18 : 0;
-                $absent = (($offset + $employeeIndex * 3) % 29 === 0);
+                // If offset is 0 (TODAY), populate real-time attendance for other employees
+                if ($offset === 0) {
+                    $isCheckedIn = in_array($employeeKey, ['manager', 'accountant', 'employee2', 'employee3', 'employee4', 'employee5'], true);
+                    $isLate = ($employeeKey === 'accountant' || $employeeKey === 'employee3');
+                    $late = $isLate ? 15 : 0;
+                    $checkIn = $isCheckedIn ? $date->copy()->setTime(8, $late) : null;
+                    // Some checked out, others still at work
+                    $checkOut = in_array($employeeKey, ['manager', 'employee2'], true) ? $date->copy()->setTime(17, 0) : null;
+                    $status = ! $isCheckedIn ? 'absent' : ($isLate ? 'late' : 'present');
+                    $worked = $checkIn && $checkOut ? max(0, $checkIn->diffInMinutes($checkOut) - 60) : 0;
+
+                    $this->upsertId('attendances', [
+                        'employee_id' => $employeeId,
+                        'work_date' => $date->toDateString(),
+                    ], [
+                        'branch_id' => $branchId,
+                        'scheduled_start' => '08:00:00',
+                        'scheduled_end' => '17:00:00',
+                        'check_in_at' => $checkIn,
+                        'check_out_at' => $checkOut,
+                        'check_in_method' => $isCheckedIn ? 'web' : 'manual',
+                        'check_out_method' => $checkOut ? 'web' : null,
+                        'check_in_location' => $isCheckedIn ? '11.5564,104.9282' : null,
+                        'check_out_location' => $checkOut ? '11.5564,104.9282' : null,
+                        'late_minutes' => $late,
+                        'early_leave_minutes' => 0,
+                        'worked_minutes' => $worked,
+                        'overtime_minutes' => 0,
+                        'status' => $status,
+                        'notes' => $isCheckedIn ? null : 'Demo absence for daily metrics',
+                    ]);
+                    continue;
+                }
+
+                $late = (($offset) % 7 === 0) ? 18 : 0;
+                $absent = (($offset) % 29 === 0);
                 $checkIn = $absent ? null : $date->copy()->setTime(8, $late);
                 $checkOut = $absent ? null : $date->copy()->setTime(17, ($offset % 4) * 5);
                 $worked = $absent ? 0 : max(0, $checkIn->diffInMinutes($checkOut) - 60);
 
-                $this->upsertId('attendances', [
+                $attId = $this->upsertId('attendances', [
                     'employee_id' => $employeeId,
                     'work_date' => $date->toDateString(),
                 ], [
@@ -361,6 +404,19 @@ class DemoDataSeeder extends Seeder
                     'status' => $absent ? 'absent' : ($late > 0 ? 'late' : 'present'),
                     'notes' => $absent ? 'Demo absence for report testing' : null,
                 ]);
+
+                // Seed pending attendance corrections for recent days on employee2 & employee4
+                if ($offset === 1 && in_array($employeeKey, ['employee2', 'employee4'], true) && Schema::hasTable('attendance_corrections')) {
+                    $this->upsertId('attendance_corrections', [
+                        'attendance_id' => $attId,
+                        'employee_id' => $employeeId,
+                    ], [
+                        'requested_check_in' => $date->copy()->setTime(8, 0),
+                        'requested_check_out' => $date->copy()->setTime(17, 0),
+                        'reason' => 'ប្រព័ន្ធភ្លេចកត់ត្រាម៉ោងចេញ',
+                        'status' => 'pending',
+                    ]);
+                }
             }
         }
     }
@@ -384,11 +440,67 @@ class DemoDataSeeder extends Seeder
             'requires_attachment' => true, 'carry_forward_allowed' => false, 'is_active' => true,
         ]);
 
+        $year = (int) date('Y');
+
+        if (Schema::hasTable('leave_balances')) {
+            foreach ($employees as $employeeKey => $employeeId) {
+                // Keep hr and employee1 clean for statutory accrual tests
+                if (in_array($employeeKey, ['hr', 'employee1'], true)) {
+                    continue;
+                }
+                $this->upsertId('leave_balances', [
+                    'employee_id' => $employeeId,
+                    'leave_type_id' => $annual,
+                    'year' => $year,
+                ], [
+                    'opening_balance' => 18,
+                    'earned_days' => 0,
+                    'used_days' => 2,
+                    'adjustment_days' => 0,
+                    'remaining_days' => 16,
+                ]);
+                $this->upsertId('leave_balances', [
+                    'employee_id' => $employeeId,
+                    'leave_type_id' => $sick,
+                    'year' => $year,
+                ], [
+                    'opening_balance' => 7,
+                    'earned_days' => 0,
+                    'used_days' => 0,
+                    'adjustment_days' => 0,
+                    'remaining_days' => 7,
+                ]);
+            }
+        }
+
         if (Schema::hasTable('leave_requests')) {
             foreach (array_values($employees) as $index => $employeeId) {
-                $approved = $index % 3 !== 0;
-                $start = $approved ? today()->subDays(5 + $index * 2) : today()->addDays(4 + $index);
+                // Seed 1 active approved leave covering today on employee 5
+                if ($index === 5) {
+                    $this->upsertId('leave_requests', [
+                        'employee_id' => $employeeId,
+                        'start_date' => today()->toDateString(),
+                    ], [
+                        'leave_type_id' => $annual,
+                        'end_date' => today()->addDays(2)->toDateString(),
+                        'total_days' => 3,
+                        'reason' => 'ឈប់សម្រាកប្រចាំឆ្នាំ',
+                        'status' => 'approved',
+                        'reviewed_by' => $users['hr'],
+                        'reviewed_at' => today()->subDay(),
+                    ]);
+                    continue;
+                }
+
+                // Seed pending requests for review queues
+                $status = match ($index) {
+                    1 => 'pending',
+                    2 => 'manager_approved',
+                    default => 'approved',
+                };
+                $start = $status === 'approved' ? today()->subDays(10 + $index * 2) : today()->addDays(2 + $index);
                 $days = $index % 4 === 0 ? 2 : 1;
+
                 $this->upsertId('leave_requests', [
                     'employee_id' => $employeeId,
                     'start_date' => $start->toDateString(),
@@ -397,9 +509,9 @@ class DemoDataSeeder extends Seeder
                     'end_date' => $start->copy()->addDays($days - 1)->toDateString(),
                     'total_days' => $days,
                     'reason' => $index % 3 === 0 ? 'ពិនិត្យសុខភាព' : 'សម្រាកកិច្ចការគ្រួសារ',
-                    'status' => $approved ? 'approved' : 'pending',
-                    'reviewed_by' => $approved ? $users['hr'] : null,
-                    'reviewed_at' => $approved ? $start->copy()->subDay() : null,
+                    'status' => $status,
+                    'reviewed_by' => $status === 'approved' ? $users['hr'] : ($status === 'manager_approved' ? $users['manager'] : null),
+                    'reviewed_at' => $status === 'approved' ? $start->copy()->subDay() : ($status === 'manager_approved' ? now()->subHours(2) : null),
                 ]);
             }
         }
@@ -420,7 +532,7 @@ class DemoDataSeeder extends Seeder
             'company_id' => $companyId, 'start_date' => $start->toDateString(), 'end_date' => $end->toDateString(),
         ], [
             'name' => 'បញ្ជីប្រាក់ខែ '.$start->format('m/Y'), 'payment_date' => $end->copy()->addDays(5),
-            'status' => 'draft', 'processed_by' => null, 'processed_at' => null,
+            'status' => 'awaiting_approval', 'processed_by' => $users['accountant'], 'processed_at' => now()->subDays(2),
             'approved_by' => null, 'approved_at' => null,
             'notes' => 'Demo payroll preview with separate USD and KHR totals; recalculate before approval',
         ]);
@@ -502,19 +614,28 @@ class DemoDataSeeder extends Seeder
         foreach (array_keys($employees) as $index => $employeeKey) {
             $employee = DB::table('employees')->where('id', $employees[$employeeKey])->first();
             $branchName = DB::table('branches')->where('id', $employee->branch_id)->value('name');
-            // Use UDC for demo records so no fake signed FDC document is represented as genuine.
-            $type = 'udc';
+            $type = $index % 3 === 0 ? 'fdc' : 'udc';
             $number = 'DEMO-'.strtoupper($type).'-'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT);
-            $start = today()->subYear();
-            $end = null;
+            $start = today()->subMonths(10);
+            $status = match ($index) {
+                1 => 'pending_approval',
+                2 => 'expiring',
+                3 => 'expiring',
+                default => 'active',
+            };
+            $end = match ($status) {
+                'expiring' => ($index === 2 ? today()->addDays(14) : today()->addDays(28)),
+                'pending_approval' => today()->addMonths(12),
+                default => ($type === 'fdc' ? today()->addMonths(6) : null),
+            };
             $this->upsertId('employment_contracts', ['contract_number' => $number], [
                 'company_id' => $companyId,
                 'employee_id' => $employees[$employeeKey],
                 'type' => $type,
-                'status' => 'active',
+                'status' => $status,
                 'start_date' => $start,
                 'end_date' => $end,
-                'signed_at' => $start->copy()->subDays(3),
+                'signed_at' => $status === 'pending_approval' ? null : $start->copy()->subDays(3),
                 'probation_category' => 'regular',
                 'probation_end_date' => $start->copy()->addMonths(3),
                 'position_title' => DB::table('positions')->where('id', $employee->position_id)->value('title'),
@@ -525,11 +646,11 @@ class DemoDataSeeder extends Seeder
                 'pay_type' => 'monthly',
                 'work_hours_per_day' => 8,
                 'work_days_per_week' => 6,
-                'renewal_notice_date' => null,
+                'renewal_notice_date' => $status === 'expiring' ? today()->subDays(5) : null,
                 'submitted_by' => $users['hr'],
                 'submitted_at' => $start->copy()->subDays(5),
-                'approved_by' => $users['owner'],
-                'approved_at' => $start->copy()->subDays(4),
+                'approved_by' => $status === 'pending_approval' ? null : $users['owner'],
+                'approved_at' => $status === 'pending_approval' ? null : $start->copy()->subDays(4),
                 'terms' => json_encode(['demo' => true, 'notice_days' => 30], JSON_THROW_ON_ERROR),
                 'checksum' => hash('sha256', $number.'|'.$employees[$employeeKey].'|'.$employee->base_salary.'|'.$employee->salary_currency),
             ]);

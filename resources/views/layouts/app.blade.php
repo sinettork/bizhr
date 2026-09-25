@@ -14,7 +14,7 @@
     <script src="{{ asset('js/confirmation-dialog.js') }}"></script>
     <script src="{{ asset('js/flash-toasts.js') }}"></script>
     <script src="{{ asset('js/app.js') }}"></script>
-    @if(session('open_modal'))<script nonce="{{ request()->attributes->get('csp_nonce') }}">document.addEventListener('DOMContentLoaded', () => bootstrap.Modal.getOrCreateInstance(document.getElementById(@json(session('open_modal')))).show());</script>@endif
+    @if(session('open_modal'))<script nonce="{{ request()->attributes->get('csp_nonce') }}">document.addEventListener('DOMContentLoaded', () => { const el = document.getElementById(@json(session('open_modal'))); if (el) { (el.classList.contains('offcanvas') ? bootstrap.Offcanvas.getOrCreateInstance(el) : bootstrap.Modal.getOrCreateInstance(el)).show(); } });</script>@endif
     @stack('scripts')
 </body>
 </html>

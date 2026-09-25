@@ -67,20 +67,54 @@ class EmployeeController extends Controller
         }
 
         $employees = $query->orderBy('employee_code')->paginate($this->perPage($request, 20))->withQueryString();
+
+        // KPI Metrics for Summary Strip
+        $baseQuery = Employee::query()->where('company_id', $company->id);
+        if (! $request->user()->can('employee.view')) {
+            $baseQuery->where('user_id', $request->user()->id);
+        }
+        $today = today();
+        $kpiMetrics = [
+            'total_active'      => (clone $baseQuery)->where('is_active', true)->count(),
+            'total_inactive'    => (clone $baseQuery)->where('is_active', false)->count(),
+            'on_leave_today'    => (clone $baseQuery)->whereHas('leaveRequests', fn ($q) => $q
+                ->where('status', 'Approved')
+                ->whereDate('start_date', '<=', $today)
+                ->whereDate('end_date', '>=', $today)
+            )->count(),
+            'probation_ending'  => (clone $baseQuery)->where('is_active', true)
+                ->whereNotNull('probation_end_date')
+                ->whereBetween('probation_end_date', [$today, $today->copy()->addDays(30)])
+                ->count(),
+            'contract_expiring' => (clone $baseQuery)->where('is_active', true)
+                ->whereNotNull('contract_end_date')
+                ->whereBetween('contract_end_date', [$today, $today->copy()->addDays(30)])
+                ->count(),
+        ];
+
+        $branchEmployeeCounts = (clone $baseQuery)
+            ->where('is_active', true)
+            ->whereNotNull('branch_id')
+            ->groupBy('branch_id')
+            ->selectRaw('branch_id, count(*) as aggregate_count')
+            ->pluck('aggregate_count', 'branch_id');
+
         $viewData = [
-            'employees' => $employees,
-            'search' => (string) $request->input('search', ''),
-            'status' => (string) $request->input('status', ''),
-            'statuses' => $this->statuses(),
-            'branchId' => $branchId,
-            'departmentId' => $departmentId,
-            'branches' => Branch::query()
+            'employees'            => $employees,
+            'kpiMetrics'           => $kpiMetrics,
+            'branchEmployeeCounts' => $branchEmployeeCounts,
+            'search'               => (string) $request->input('search', ''),
+            'status'               => (string) $request->input('status', ''),
+            'statuses'             => $this->statuses(),
+            'branchId'             => $branchId,
+            'departmentId'         => $departmentId,
+            'branches'             => Branch::query()
                 ->where('company_id', $company->id)
                 ->where('is_active', true)
                 ->orderByDesc('is_head_office')
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'departments' => Department::query()
+            'departments'          => Department::query()
                 ->with('branch:id,name')
                 ->where('company_id', $company->id)
                 ->where('is_active', true)
@@ -135,10 +169,16 @@ class EmployeeController extends Controller
         if ($canViewSensitive) {
             $relations['documents'] = fn ($query) => $query->latest();
             $relations['employmentHistories'] = fn ($query) => $query->with(['department', 'position', 'recordedBy'])->latest('effective_date');
+            $relations['leaveBalances'] = fn ($query) => $query->with('leaveType')->where('year', now()->year)->orderBy('leave_type_id');
         }
         $employee->load($relations);
 
-        return view('employees.show', compact('employee', 'canViewSensitive'));
+        // Today's attendance status for quick-actions header
+        $todayAttendance = $canViewSensitive
+            ? $employee->attendances()->whereDate('work_date', today())->first(['id', 'check_in_at', 'check_out_at', 'status'])
+            : null;
+
+        return view('employees.show', compact('employee', 'canViewSensitive', 'todayAttendance'));
     }
 
     public function idCard(Request $request, Employee $employee): View

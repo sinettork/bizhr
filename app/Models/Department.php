@@ -17,10 +17,14 @@ class Department extends Model
         'company_id',
         'branch_id',
         'name',
+        'local_name',
         'code',
         'manager_name',
         'phone',
+        'phone_extension',
         'email',
+        'telegram_username',
+        'headcount_capacity',
         'description',
         'is_active',
     ];
@@ -28,6 +32,7 @@ class Department extends Model
     protected function casts(): array
     {
         return [
+            'headcount_capacity' => 'integer',
             'is_active' => 'boolean',
         ];
     }

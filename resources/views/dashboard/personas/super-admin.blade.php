@@ -1,72 +1,70 @@
-<x-workspace-command-bar title="System Dashboard" icon="fa-shield-halved" context="System Oversight">
+<x-workspace-command-bar title="System Administration" icon="fa-server" context="IT / Admin">
     <x-slot:actions>
         <div class="d-flex flex-wrap gap-2">
-            <a class="btn btn-action-link btn-sm" href="{{ route('users.index') }}"><i class="fa-solid fa-users-gear"></i><span>Users</span></a>
-            <a class="btn btn-action-link btn-sm" href="{{ route('roles.index') }}"><i class="fa-solid fa-shield-halved"></i><span>Roles</span></a>
-            <a class="btn btn-primary btn-sm" href="{{ route('audit-logs.index') }}"><i class="fa-solid fa-file-shield me-1"></i>Audit logs</a>
+                <button class="btn btn-action-link btn-sm" type="button"><i class="fa-solid fa-broom"></i><span>Clear Cache</span></button>
+            <a class="btn btn-primary btn-sm" href="{{ route('roles.index') }}"><i class="fa-solid fa-shield-halved me-1"></i>Role Management</a>
         </div>
     </x-slot:actions>
 </x-workspace-command-bar>
 
 <div class="workspace-summary">
     @foreach([
-        ['Active employees', $metrics['activeEmployees']],
+        ['Active Employees', $metrics['activeEmployees']],
         ['Branches', $metrics['branches']],
-        ['Linked users', $metrics['linkedUsers']],
-        ['Inactive users', $metrics['inactiveUsers']],
-        ['Audit events today', $metrics['auditToday']],
-        ['Exports in progress', $metrics['pendingExports']],
-        ['Failed exports', $metrics['failedExports']],
+        ['Linked Users', $metrics['linkedUsers']],
+        ['Failed Exports', $metrics['failedExports']],
     ] as [$label, $value])
         <div class="workspace-summary-item">
             <div class="label">{{ $label }}</div>
-            <div class="value">{{ number_format($value) }}</div>
+            <div class="value {{ str_contains($label, 'Failed') ? ($value > 0 ? 'text-danger' : '') : '' }}">{{ $value }}</div>
         </div>
     @endforeach
 </div>
 
 <div class="row g-3">
-    <div class="col-12 col-xl-5">
-        <section class="reference-list h-100">
-            <div class="reference-list-toolbar">
+    <div class="col-12 col-xl-6">
+        <section class="reference-list h-100 border border-danger border-2 rounded">
+            <div class="reference-list-toolbar bg-danger text-white rounded-top">
                 <div>
-                    <div class="small text-uppercase text-body-secondary fw-semibold">System attention</div>
-                    <div class="fw-semibold text-dark">Administrative checks</div>
+                    <div class="small text-uppercase text-white-50 fw-semibold">System Health</div>
+                    <div class="fw-semibold text-white">System Attention</div>
                 </div>
             </div>
-            @foreach($systemItems as $item)
-                <a class="d-flex align-items-center gap-3 px-3 py-3 border-bottom text-decoration-none text-body" href="{{ route($item['route']) }}">
-                    <i class="fa-solid {{ $item['icon'] }} text-body-secondary"></i>
-                    <span class="flex-grow-1 fw-semibold">{{ $item['label'] }}</span>
-                    <span class="fw-semibold {{ $item['count'] > 0 ? 'text-warning' : 'text-success' }}">{{ number_format($item['count']) }}</span>
-                    <i class="fa-solid fa-chevron-right text-body-secondary small"></i>
-                </a>
-            @endforeach
+            @forelse($systemItems as $item)
+                <div class="d-flex align-items-center gap-3 px-3 py-3 border-bottom">
+                    <div class="flex-grow-1 min-w-0">
+                        <div class="fw-semibold text-dark text-truncate">{{ $item['label'] }}</div>
+                        <div class="small text-body-secondary text-truncate">{{ $item['count'] }}</div>
+                    </div>
+                </div>
+            @empty
+                <x-empty-state class="py-4 px-2" icon="fa-network-wired" tone="success" title="Systems Nominal" message="No system attention items are pending." />
+            @endforelse
         </section>
     </div>
 
-    <div class="col-12 col-xl-7">
+    <div class="col-12 col-xl-6">
         <section class="reference-list h-100">
             <div class="reference-list-toolbar">
                 <div>
-                    <div class="small text-uppercase text-body-secondary fw-semibold">Audit trail</div>
-                    <div class="fw-semibold text-dark">Recent system activity</div>
+                    <div class="small text-uppercase text-body-secondary fw-semibold">Security</div>
+                    <div class="fw-semibold text-dark">Recent Admin Audit Log</div>
                 </div>
-                <a class="btn btn-action-link btn-sm" href="{{ route('audit-logs.index') }}">View all</a>
+                <a class="btn btn-action-link btn-sm" href="{{ route('audit-logs.index') }}">Full Log</a>
             </div>
             @forelse($recentAuditLogs as $log)
-                <div class="d-flex align-items-start gap-3 px-3 py-3 border-bottom">
-                    <i class="fa-solid fa-shield text-body-secondary mt-1"></i>
+                <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom">
                     <div class="flex-grow-1 min-w-0">
-                        <div class="fw-semibold text-dark">{{ str($log->action)->replace('_', ' ')->title() }}</div>
-                        <div class="small text-body-secondary text-truncate">
-                            {{ $log->user?->name ?? 'System' }} · {{ str($log->module)->replace('_', ' ')->title() }}
+                        <div class="fw-semibold text-dark">
+                            <span class="text-primary">{{ $log->user?->name ?? 'System' }}</span>
+                            {{ $log->action }}
+                            <span class="text-dark">{{ class_basename($log->record_type) }} #{{ $log->record_id }}</span>
                         </div>
+                        <small class="text-body-secondary">IP: {{ $log->ip_address }} · {{ $log->created_at->format('H:i:s') }}</small>
                     </div>
-                    <small class="text-body-secondary text-nowrap">{{ $log->created_at?->format('H:i') ?? '—' }}</small>
                 </div>
             @empty
-                <x-empty-state class="py-5 px-3" icon="fa-file-shield" title="No audit activity yet" message="System audit events will appear here." />
+                <x-empty-state class="py-4 px-2" icon="fa-shield-halved" title="No Recent Activity" message="No audit events have been recorded yet." />
             @endforelse
         </section>
     </div>

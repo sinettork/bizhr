@@ -6,7 +6,6 @@ use App\Models\User;
 use App\Services\AssetWorkflowService;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\DemoDataSeeder;
-use DomainException;
 
 beforeEach(function (): void {
     $this->seed([DatabaseSeeder::class, DemoDataSeeder::class]);

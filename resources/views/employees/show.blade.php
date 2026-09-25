@@ -1,4 +1,6 @@
-@php($isOwnProfile = $employee->user_id === auth()->id())
+@php
+    $isOwnProfile = $employee->user_id === auth()->id();
+@endphp
 
 <x-layouts::app :title="$isOwnProfile ? 'My Profile' : ($employee->full_name_en ?: $employee->employee_code)">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
@@ -25,6 +27,21 @@
             <a class="btn btn-light btn-sm" href="{{ $isOwnProfile ? route('dashboard') : route('employees.index') }}">
                 <i class="fa-solid fa-arrow-left me-1"></i>{{ $isOwnProfile ? 'Dashboard' : 'Employees' }}
             </a>
+            @can('attendance.report')
+                <a class="btn btn-action-link btn-sm" href="{{ route('attendance.reports.index', ['employee_id' => $employee->id]) }}" title="Attendance report">
+                    <i class="fa-solid fa-clock-rotate-left"></i><span>Attendance</span>
+                </a>
+            @endcan
+            @can('leave.request')
+                <a class="btn btn-action-link btn-sm" href="{{ route('leave.requests.index', ['employee_id' => $employee->id]) }}" title="Leave requests">
+                    <i class="fa-solid fa-calendar-minus"></i><span>Leave</span>
+                </a>
+            @endcan
+            @can('payroll.view')
+                <a class="btn btn-action-link btn-sm" href="{{ route('payroll.my-payslips') }}" title="Payslips">
+                    <i class="fa-solid fa-receipt"></i><span>Payslip</span>
+                </a>
+            @endcan
             <a class="btn btn-action-link btn-sm" href="{{ route('employees.id-card', $employee) }}">
                 <i class="fa-solid fa-id-card"></i><span>ID card</span>
             </a>
@@ -68,6 +85,12 @@
                 <button class="profile-nav-tab" id="tab-documents-btn" data-bs-toggle="tab" data-bs-target="#tab-documents" type="button" role="tab" aria-controls="tab-documents" aria-selected="false">
                     <i class="fa-solid fa-file-invoice"></i><span>Documents</span>
                     <span class="status-counter ms-1">{{ $employee->documents->count() }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="profile-nav-tab" id="tab-leave-btn" data-bs-toggle="tab" data-bs-target="#tab-leave" type="button" role="tab" aria-controls="tab-leave" aria-selected="false">
+                    <i class="fa-solid fa-calendar-minus"></i><span>Leave Balance</span>
+                    <span class="status-counter ms-1">{{ $employee->leaveBalances?->count() ?? 0 }}</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -251,6 +274,56 @@
                                 @endforelse
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Leave Balance Tab --}}
+            <div class="tab-pane fade" id="tab-leave" role="tabpanel" aria-labelledby="tab-leave-btn">
+                <div class="profile-card mb-3">
+                    <div class="profile-card-header">
+                        <h2 class="profile-card-title"><i class="fa-solid fa-calendar-minus text-primary"></i><span>Leave Balance — {{ now()->year }}</span></h2>
+                        @can('leave.request')
+                            <a href="{{ route('leave.requests.index') }}" class="btn btn-action-link btn-sm">
+                                <i class="fa-solid fa-plus"></i><span>Request Leave</span>
+                            </a>
+                        @endcan
+                    </div>
+                    <div class="profile-card-body">
+                        @if(!empty($employee->leaveBalances) && $employee->leaveBalances->count() > 0)
+                            <div class="row g-3">
+                                @foreach($employee->leaveBalances as $balance)
+                                    @php
+                                        $used = (float) $balance->used_days;
+                                        $total = (float) ($balance->opening_balance + $balance->earned_days + $balance->adjustment_days);
+                                        $remaining = (float) $balance->remaining_days;
+                                        $pct = $total > 0 ? min(100, round($used / $total * 100)) : 0;
+                                        $barColor = $pct >= 90 ? 'danger' : ($pct >= 70 ? 'warning' : 'success');
+                                    @endphp
+                                    <div class="col-sm-6 col-md-4 col-lg-3">
+                                        <div class="p-3 rounded" style="background:#f8fafc; border:1px solid #e8ecf4;">
+                                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                                <span class="fw-semibold text-dark" style="font-size:.8rem;">{{ $balance->leaveType?->name ?? 'Unknown' }}</span>
+                                                <span class="badge text-bg-light border" style="font-size:.62rem;">{{ now()->year }}</span>
+                                            </div>
+                                            <div class="d-flex align-items-baseline gap-1 mb-1">
+                                                <span class="fw-bold text-dark" style="font-size:1.4rem; line-height:1;">{{ number_format($remaining, 1) }}</span>
+                                                <span class="text-body-secondary" style="font-size:.72rem;">/ {{ number_format($total, 1) }} days</span>
+                                            </div>
+                                            <div class="progress mb-1" style="height:4px; border-radius:.2rem;">
+                                                <div class="progress-bar bg-{{ $barColor }}" style="width:{{ $pct }}%; border-radius:.2rem;"></div>
+                                            </div>
+                                            <div class="d-flex justify-content-between" style="font-size:.65rem; color:#64748b;">
+                                                <span>Used: {{ number_format($used, 1) }}d</span>
+                                                <span>Remaining: {{ number_format($remaining, 1) }}d</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @else
+                            <x-empty-state icon="fa-calendar-minus" title="No leave balances" message="No leave balances have been initialized for this employee yet." compact />
+                        @endif
                     </div>
                 </div>
             </div>

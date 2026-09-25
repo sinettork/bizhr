@@ -36,6 +36,10 @@ class EmployeeFactory extends Factory
             'hire_date' => $this->faker->dateTimeBetween('-5 years', 'now'),
             'base_salary' => $this->faker->randomFloat(2, 200, 5000),
             'salary_currency' => 'USD',
+            'marital_status' => $this->faker->randomElement(['Single', 'Married']),
+            'tax_dependents' => $this->faker->numberBetween(0, 3),
+            'work_email' => $this->faker->unique()->companyEmail(),
+            'current_address' => $this->faker->address(),
         ];
     }
 }

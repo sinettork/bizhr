@@ -23,6 +23,9 @@
                         ->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))
                         ->implode('');
                     $canEdit = auth()->user()->can('employee.edit') || (auth()->user()->can('employee.edit-own') && $employee->user_id === auth()->id());
+                    $today = today();
+                    $contractExpiring = $employee->contract_end_date && $employee->contract_end_date->between($today, $today->copy()->addDays(30));
+                    $probationEnding  = $employee->probation_end_date && $employee->probation_end_date->between($today, $today->copy()->addDays(30));
                 @endphp
                 <tr>
                     <td class="ps-3 pe-2 text-center">
@@ -61,7 +64,19 @@
                         <div class="small text-body-secondary text-truncate">{{ $employee->email ?: 'No email' }}</div>
                     </td>
                     <td class="text-nowrap">
-                        <span class="badge text-bg-{{ $employee->is_active ? 'success' : 'secondary' }}">{{ $employee->employment_status }}</span>
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <span class="badge text-bg-{{ $employee->is_active ? 'success' : 'secondary' }}">{{ $employee->employment_status }}</span>
+                            @if($contractExpiring)
+                                <span class="badge text-bg-danger" title="Contract ends {{ $employee->contract_end_date->format('d M Y') }}">
+                                    <i class="fa-solid fa-file-circle-exclamation me-1"></i>Contract exp.
+                                </span>
+                            @endif
+                            @if($probationEnding)
+                                <span class="badge text-bg-warning" title="Probation ends {{ $employee->probation_end_date->format('d M Y') }}">
+                                    <i class="fa-solid fa-hourglass-half me-1"></i>Probation
+                                </span>
+                            @endif
+                        </div>
                     </td>
                     <td class="text-end pe-3 text-nowrap">
                         <a class="btn btn-action-link btn-sm" href="{{ route('employees.show', $employee) }}">

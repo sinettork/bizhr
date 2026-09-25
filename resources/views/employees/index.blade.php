@@ -7,12 +7,9 @@
                     <input class="form-control" name="search" value="{{ $search }}" placeholder="Search name, code, phone or email" autocomplete="off">
                 </div>
 
-                <select class="form-select reference-status" name="branch" aria-label="Filter by branch">
-                    <option value="">All branches</option>
-                    @foreach($branches as $branch)
-                        <option value="{{ $branch->id }}" @selected($branchId === $branch->id)>{{ $branch->name }}</option>
-                    @endforeach
-                </select>
+                @if($branchId > 0)
+                    <input type="hidden" name="branch" value="{{ $branchId }}">
+                @endif
 
                 <select class="form-select reference-status" name="department" aria-label="Filter by department">
                     <option value="">All departments</option>
@@ -45,6 +42,75 @@
             />
         </x-slot:actions>
     </x-workspace-command-bar>
+
+    {{-- KPI Summary Strip --}}
+    @if(auth()->user()->can('employee.view'))
+        <div class="row g-2 g-md-3 mb-3">
+            @php
+                $kpis = [
+                    [
+                        'label'   => 'Active Employees',
+                        'value'   => number_format($kpiMetrics['total_active']),
+                        'icon'    => 'fa-users',
+                        'color'   => 'text-success',
+                        'bg'      => '#f0fdf4',
+                        'border'  => '#bbf7d0',
+                        'href'    => route('employees.index', ['status' => 'Active']),
+                    ],
+                    [
+                        'label'   => 'Inactive / Archived',
+                        'value'   => number_format($kpiMetrics['total_inactive']),
+                        'icon'    => 'fa-user-slash',
+                        'color'   => 'text-secondary',
+                        'bg'      => '#f8f9fa',
+                        'border'  => '#dee2e6',
+                        'href'    => route('employees.index', ['status' => 'Inactive']),
+                    ],
+                    [
+                        'label'   => 'On Leave Today',
+                        'value'   => number_format($kpiMetrics['on_leave_today']),
+                        'icon'    => 'fa-calendar-minus',
+                        'color'   => 'text-info',
+                        'bg'      => '#eff6ff',
+                        'border'  => '#bfdbfe',
+                        'href'    => route('leave.requests.review'),
+                    ],
+                    [
+                        'label'   => 'Probation Ending ≤30d',
+                        'value'   => number_format($kpiMetrics['probation_ending']),
+                        'icon'    => 'fa-hourglass-half',
+                        'color'   => $kpiMetrics['probation_ending'] > 0 ? 'text-warning' : 'text-secondary',
+                        'bg'      => $kpiMetrics['probation_ending'] > 0 ? '#fffbeb' : '#f8f9fa',
+                        'border'  => $kpiMetrics['probation_ending'] > 0 ? '#fde68a' : '#dee2e6',
+                        'href'    => route('employees.index'),
+                    ],
+                    [
+                        'label'   => 'Contract Expiring ≤30d',
+                        'value'   => number_format($kpiMetrics['contract_expiring']),
+                        'icon'    => 'fa-file-circle-exclamation',
+                        'color'   => $kpiMetrics['contract_expiring'] > 0 ? 'text-danger' : 'text-secondary',
+                        'bg'      => $kpiMetrics['contract_expiring'] > 0 ? '#fff1f2' : '#f8f9fa',
+                        'border'  => $kpiMetrics['contract_expiring'] > 0 ? '#fecdd3' : '#dee2e6',
+                        'href'    => route('employees.index'),
+                    ],
+                ];
+            @endphp
+            @foreach($kpis as $kpi)
+                <div class="col-6 col-md-4 col-lg">
+                    <a href="{{ $kpi['href'] }}" class="d-flex align-items-center gap-3 p-3 rounded text-decoration-none employee-kpi-card h-100"
+                        style="background:{{ $kpi['bg'] }}; border: 1px solid {{ $kpi['border'] }}; border-radius: .35rem !important; transition: filter 120ms, border-color 120ms;">
+                        <span class="{{ $kpi['color'] }}" style="font-size: 1.35rem; width: 36px; text-align:center; flex-shrink:0;">
+                            <i class="fa-solid {{ $kpi['icon'] }}"></i>
+                        </span>
+                        <div class="min-w-0">
+                            <div class="fw-bold text-dark lh-1 mb-1" style="font-size: 1.15rem;">{{ $kpi['value'] }}</div>
+                            <div class="text-body-secondary lh-1 text-truncate" style="font-size: .68rem; font-weight: 600;">{{ strtoupper($kpi['label']) }}</div>
+                        </div>
+                    </a>
+                </div>
+            @endforeach
+        </div>
+    @endif
 
     @include('employees._list', ['employees' => $employees])
 

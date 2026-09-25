@@ -34,6 +34,48 @@ use App\Models\AttendanceQrSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/health', function () {
+    $checks = [];
+    $status = 200;
+
+    // Database check
+    try {
+        \Illuminate\Support\Facades\DB::selectOne('SELECT 1 AS ok');
+        $checks['database'] = 'ok';
+    } catch (\Throwable) {
+        $checks['database'] = 'fail';
+        $status = 503;
+    }
+
+    // Cache / Redis check
+    try {
+        $key = 'health:' . str()->random(6);
+        \Illuminate\Support\Facades\Cache::put($key, true, 5);
+        \Illuminate\Support\Facades\Cache::forget($key);
+        $checks['cache'] = 'ok';
+    } catch (\Throwable) {
+        $checks['cache'] = 'fail';
+        $status = 503;
+    }
+
+    // Queue check (verify failed_jobs table is reachable — lightweight)
+    try {
+        \Illuminate\Support\Facades\DB::table('jobs')->count();
+        $checks['queue_table'] = 'ok';
+    } catch (\Throwable) {
+        $checks['queue_table'] = 'fail';
+        $status = 503;
+    }
+
+    return response()->json([
+        'status'  => $status === 200 ? 'healthy' : 'degraded',
+        'checks'  => $checks,
+        'version' => config('app.version', '1.0'),
+        'env'     => config('app.env'),
+        'time'    => now()->toIso8601String(),
+    ], $status);
+})->name('health.deep');
+
 Route::get('/', fn () => auth()->check() ? redirect()->route('dashboard') : redirect()->route('login'))->name('home');
 
 Route::get('/verify/id-card/{employee}/{token}', [EmployeeController::class, 'idCardVerify'])->middleware('throttle:30,1')->name('employees.id-card.verify');

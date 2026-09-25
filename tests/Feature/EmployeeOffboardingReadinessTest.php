@@ -7,7 +7,6 @@ use App\Services\EmployeeLifecycleService;
 use App\Services\EmployeeOffboardingReadinessService;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\DemoDataSeeder;
-use DomainException;
 
 beforeEach(function (): void {
     $this->seed([DatabaseSeeder::class, DemoDataSeeder::class]);

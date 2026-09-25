@@ -68,6 +68,22 @@ class Employee extends Model
         'rehire_requested_at', 'rehire_requested_by', 'rehire_effective_date', 'rehire_reason', 'rehire_approved_at', 'rehire_approved_by',
         'employment_status',
         'is_active',
+        'marital_status',
+        'spouse_name',
+        'spouse_work_status',
+        'tin_number',
+        'tax_dependents',
+        'nssf_number',
+        'nssf_enrolled',
+        'is_tax_resident',
+        'reports_to_id',
+        'termination_date',
+        'termination_reason',
+        'turnover_type',
+        'work_email',
+        'current_address',
+        'default_shift_id',
+        'seniority_date',
     ];
 
     protected function casts(): array
@@ -87,6 +103,11 @@ class Employee extends Model
             'rehire_approved_at' => 'datetime',
             'base_salary' => 'decimal:2',
             'is_active' => 'boolean',
+            'termination_date' => 'date',
+            'seniority_date' => 'date',
+            'nssf_enrolled' => 'boolean',
+            'is_tax_resident' => 'boolean',
+            'tax_dependents' => 'integer',
         ];
     }
 
@@ -166,6 +187,24 @@ class Employee extends Model
     public function leaveRequests(): HasMany
     {
         return $this->hasMany(LeaveRequest::class);
+    }
+
+    /** @return BelongsTo<Employee, $this> */
+    public function reportsTo(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'reports_to_id');
+    }
+
+    /** @return HasMany<Employee, $this> */
+    public function subordinates(): HasMany
+    {
+        return $this->hasMany(Employee::class, 'reports_to_id');
+    }
+
+    /** @return BelongsTo<WorkShift, $this> */
+    public function defaultShift(): BelongsTo
+    {
+        return $this->belongsTo(WorkShift::class, 'default_shift_id');
     }
 
     public function getFullName(): string

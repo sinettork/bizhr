@@ -146,6 +146,7 @@ class RoleSeeder extends Seeder
             Role::query()
                 ->where('guard_name', 'web')
                 ->whereIn('name', $aliases)
+                ->where('id', '!=', $canonical->id)
                 ->get()
                 ->each(function (Role $alias) use ($canonical): void {
                     DB::table('model_has_roles')

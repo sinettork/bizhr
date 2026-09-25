@@ -357,7 +357,7 @@ class DashboardController extends Controller
         ];
     }
 
-    /** @param callable(Builder): mixed $constraint */
+    /** @param callable(Builder<Task>): mixed $constraint */
     private function taskCount(int $companyId, int $departmentId, callable $constraint): int
     {
         $query = Task::query()

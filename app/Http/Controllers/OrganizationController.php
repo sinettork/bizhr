@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Department;
+use App\Models\Employee;
 use App\Models\EmploymentType;
 use App\Models\Position;
 use App\Services\UploadedFileSecurityService;
@@ -114,7 +115,7 @@ class OrganizationController extends Controller
         abort_unless($request->user()?->can('department.view'), 403);
         $companyId = $this->currentCompanyId($request);
 
-        $departments = Department::query()->with('branch')->withCount('employees')->where('company_id', $companyId)
+        $departments = Department::query()->with('branch')->withCount(['employees', 'positions'])->where('company_id', $companyId)
             ->when($request->string('search')->trim()->value(), fn ($query, $search) => $query->where(fn ($query) => $query
                 ->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%")))
             ->when($request->filled('branch_id'), fn ($query) => $query->where('branch_id', $request->integer('branch_id')))
@@ -122,7 +123,20 @@ class OrganizationController extends Controller
             ->orderBy('name')->paginate($this->perPage($request, 20))->withQueryString();
         $branches = Branch::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get();
 
-        return view('organization.departments', compact('departments', 'branches'));
+        $summaryMetrics = [
+            'total_departments' => Department::query()->where('company_id', $companyId)->count(),
+            'active_departments' => Department::query()->where('company_id', $companyId)->where('is_active', true)->count(),
+            'total_employees' => Employee::query()->where('company_id', $companyId)->whereNotNull('department_id')->where('is_active', true)->count(),
+            'branches_count' => Department::query()->where('company_id', $companyId)->whereNotNull('branch_id')->distinct('branch_id')->count('branch_id'),
+        ];
+
+        $branchDepartmentCounts = Department::query()
+            ->where('company_id', $companyId)
+            ->selectRaw('branch_id, count(*) as total')
+            ->groupBy('branch_id')
+            ->pluck('total', 'branch_id');
+
+        return view('organization.departments', compact('departments', 'branches', 'summaryMetrics', 'branchDepartmentCounts'));
     }
 
     public function storeDepartment(Request $request): RedirectResponse
@@ -130,8 +144,8 @@ class OrganizationController extends Controller
         abort_unless($request->user()?->can('department.create'), 403);
         $companyId = $this->currentCompanyId($request);
         $this->prepareGeneratedCode($request, 'code', 'departments', 'code', 'DEPT', ['name'], 'company_id', $companyId);
-        $data = $request->validate(['name' => ['required', 'string', 'max:180'], 'code' => ['required', 'string', 'max:30', Rule::unique('departments')->where('company_id', $companyId)], 'branch_id' => ['nullable', Rule::exists('branches', 'id')->where('company_id', $companyId)], 'manager_name' => ['nullable', 'string', 'max:180'], 'phone' => ['nullable', 'string', 'max:50'], 'email' => ['nullable', 'email', 'max:255'], 'description' => ['nullable', 'string', 'max:2000'], 'is_active' => ['boolean']]);
-        Department::query()->create([...$data, 'company_id' => $companyId, 'is_active' => $request->boolean('is_active', true)]);
+        $data = $this->departmentData($request);
+        Department::query()->create([...$data, 'company_id' => $companyId]);
 
         return $this->createdResponse($request, 'Department created.', 'departmentForm');
     }
@@ -267,8 +281,21 @@ class OrganizationController extends Controller
     private function departmentData(Request $request, ?Department $department = null): array
     {
         $companyId = $this->currentCompanyId($request);
-        $data = $request->validate(['name' => ['required', 'string', 'max:180'], 'code' => ['required', 'string', 'max:30', Rule::unique('departments')->where('company_id', $companyId)->ignore($department)], 'branch_id' => ['nullable', Rule::exists('branches', 'id')->where('company_id', $companyId)], 'manager_name' => ['nullable', 'string', 'max:180'], 'phone' => ['nullable', 'string', 'max:50'], 'email' => ['nullable', 'email', 'max:255'], 'description' => ['nullable', 'string', 'max:2000'], 'is_active' => ['boolean']]);
-        $data['is_active'] = $request->boolean('is_active');
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:180'],
+            'local_name' => ['nullable', 'string', 'max:180'],
+            'code' => ['required', 'string', 'max:30', Rule::unique('departments')->where('company_id', $companyId)->ignore($department)],
+            'branch_id' => ['nullable', Rule::exists('branches', 'id')->where('company_id', $companyId)],
+            'manager_name' => ['nullable', 'string', 'max:180'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'phone_extension' => ['nullable', 'string', 'max:30'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'telegram_username' => ['nullable', 'string', 'max:100'],
+            'headcount_capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'is_active' => ['boolean'],
+        ]);
+        $data['is_active'] = $request->boolean('is_active', true);
 
         return $data;
     }
