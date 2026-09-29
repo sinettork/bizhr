@@ -5,6 +5,7 @@ use App\Http\Middleware\EnsureEmployeeContext;
 use App\Http\Middleware\GuardEmployeeArchiveReadiness;
 use App\Http\Middleware\PreventEmployeeBulkOverwrite;
 use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\SuperAdminPermissionMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -36,7 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'role' => RoleMiddleware::class,
-            'permission' => PermissionMiddleware::class,
+            'permission' => SuperAdminPermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'active' => EnsureAccountIsActive::class,
         ]);
