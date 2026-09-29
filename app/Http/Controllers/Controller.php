@@ -17,7 +17,10 @@ abstract class Controller
     protected function currentCompanyId(Request $request): int
     {
         $companyId = $request->user()?->companyId();
-        abort_unless($companyId !== null, 403, 'Your account is not linked to a company context.');
+        $message = $request->user()?->hasRole('Super Admin')
+            ? 'Select a company to access its workspace.'
+            : 'Your account is not linked to a company context.';
+        abort_unless($companyId !== null, 403, $message);
 
         return $companyId;
     }

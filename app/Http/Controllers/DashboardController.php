@@ -28,15 +28,17 @@ class DashboardController extends Controller
         $user = $request->user();
         abort_unless($user instanceof User, 403);
 
-        $companyId = $this->currentCompanyId($request);
-        $employee = Employee::query()
-            ->where('company_id', $companyId)
-            ->where('user_id', $user->id)
-            ->first();
         $persona = $this->resolvePersona($user);
+        $companyId = $persona === 'super-admin' ? null : $this->currentCompanyId($request);
+        $employee = $companyId === null
+            ? null
+            : Employee::query()
+                ->where('company_id', $companyId)
+                ->where('user_id', $user->id)
+                ->first();
 
         $data = match ($persona) {
-            'super-admin' => $this->superAdminDashboard($companyId),
+            'super-admin' => $this->superAdminDashboard(),
             'owner' => $this->ownerDashboard($companyId),
             'hr' => $this->hrDashboard($companyId),
             'accountant' => $this->accountantDashboard($companyId),
@@ -282,16 +284,16 @@ class DashboardController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function superAdminDashboard(int $companyId): array
+    private function superAdminDashboard(): array
     {
         $metrics = [
-            'activeEmployees' => Employee::query()->where('company_id', $companyId)->where('is_active', true)->count(),
-            'branches' => Branch::query()->where('company_id', $companyId)->count(),
-            'linkedUsers' => User::query()->whereHas('employee', fn (Builder $query) => $query->where('company_id', $companyId))->count(),
-            'inactiveUsers' => User::query()->where('is_active', false)->whereHas('employee', fn (Builder $query) => $query->where('company_id', $companyId))->count(),
-            'auditToday' => AuditLog::query()->where('company_id', $companyId)->whereDate('created_at', today())->count(),
-            'pendingExports' => DataExport::query()->where('company_id', $companyId)->whereIn('status', ['queued', 'processing'])->count(),
-            'failedExports' => DataExport::query()->where('company_id', $companyId)->where('status', 'failed')->count(),
+            'activeEmployees' => Employee::query()->where('is_active', true)->count(),
+            'branches' => Branch::query()->count(),
+            'linkedUsers' => User::query()->whereHas('employee')->count(),
+            'inactiveUsers' => User::query()->where('is_active', false)->whereHas('employee')->count(),
+            'auditToday' => AuditLog::query()->whereDate('created_at', today())->count(),
+            'pendingExports' => DataExport::query()->whereIn('status', ['queued', 'processing'])->count(),
+            'failedExports' => DataExport::query()->where('status', 'failed')->count(),
         ];
 
         $systemItems = collect([
@@ -302,7 +304,6 @@ class DashboardController extends Controller
 
         $recentAuditLogs = AuditLog::query()
             ->with('user:id,name')
-            ->where('company_id', $companyId)
             ->latest('created_at')
             ->limit(8)
             ->get();

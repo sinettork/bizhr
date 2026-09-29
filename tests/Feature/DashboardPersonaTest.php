@@ -96,3 +96,51 @@ it('renders a pure Super Admin system dashboard even when an employee record is 
         ->assertDontSee('My next work')
         ->assertDontSee('My workspace');
 });
+
+it('renders the Super Admin system dashboard without a company-linked employee account', function (): void {
+    Company::factory()->count(2)->create();
+    $user = User::factory()->create([
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+    $user->assignRole('Super Admin');
+
+    $this->actingAs($user)->get(route('dashboard'))
+        ->assertOk()
+        ->assertViewHas('dashboardPersona', 'super-admin');
+});
+
+it('lets Super Admin select a company and use its company-scoped features', function (): void {
+    $firstCompany = Company::factory()->create(['name' => 'First Workspace']);
+    $firstBranch = Branch::factory()->create(['company_id' => $firstCompany->id, 'name' => 'First Branch']);
+    $secondCompany = Company::factory()->create(['name' => 'Second Workspace']);
+    Branch::factory()->create(['company_id' => $secondCompany->id, 'name' => 'Second Branch']);
+    $user = User::factory()->create([
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+    $user->assignRole('Super Admin');
+
+    $this->actingAs($user)
+        ->post(route('company-context.update'), ['company_id' => $firstCompany->id])
+        ->assertRedirect(route('dashboard'))
+        ->assertSessionHas('active_company_id', $firstCompany->id);
+
+    $this->get(route('branches.index'))
+        ->assertOk()
+        ->assertSee($firstBranch->name)
+        ->assertDontSee('Second Branch');
+});
+
+it('prevents non-Super Admin users from changing the active company', function (): void {
+    $company = Company::factory()->create();
+    $user = User::factory()->create([
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+    $user->assignRole('Employee');
+
+    $this->actingAs($user)
+        ->post(route('company-context.update'), ['company_id' => $company->id])
+        ->assertForbidden();
+});

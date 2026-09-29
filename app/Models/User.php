@@ -94,6 +94,17 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 
     public function companyId(): ?int
     {
+        if ($this->exists && $this->hasRole('Super Admin') && request()->hasSession()) {
+            $selectedCompanyId = request()->session()->get('active_company_id');
+            if (is_numeric($selectedCompanyId)) {
+                $selectedCompany = Company::query()->find((int) $selectedCompanyId);
+
+                if ($selectedCompany !== null) {
+                    return (int) $selectedCompany->id;
+                }
+            }
+        }
+
         $employee = $this->employee()->first();
 
         if ($employee !== null) {

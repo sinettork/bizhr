@@ -9,6 +9,7 @@ use App\Http\Controllers\AttendanceQrController;
 use App\Http\Controllers\AttendanceReportController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\BulkImportController;
+use App\Http\Controllers\CompanyContextController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardPreferenceController;
 use App\Http\Controllers\DataExportController;
@@ -99,6 +100,7 @@ Route::get('/attendance/qr/{token}/start', function (Request $request, string $t
 Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::put('/preferences/table-columns', [TablePreferenceController::class, 'update'])->name('preferences.table-columns.update');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::post('/admin/company-context', [CompanyContextController::class, 'update'])->middleware('role:Super Admin')->name('company-context.update');
     Route::put('/preferences/dashboard', [DashboardPreferenceController::class, 'update'])->name('preferences.dashboard.update');
     Route::delete('/preferences/dashboard', [DashboardPreferenceController::class, 'destroy'])->name('preferences.dashboard.destroy');
 

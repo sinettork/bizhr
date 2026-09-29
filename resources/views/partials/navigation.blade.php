@@ -13,6 +13,11 @@
 
     $isPureSuperAdmin = (bool) $user?->hasRole('Super Admin')
         && $user?->roles()->where('name', '!=', 'Super Admin')->doesntExist();
+    $isSuperAdmin = (bool) $user?->hasRole('Super Admin');
+    $activeCompanyId = $isSuperAdmin ? $user?->companyId() : null;
+    $companies = $isSuperAdmin
+        ? \App\Models\Company::query()->orderBy('name')->get(['id', 'name'])
+        : collect();
     $hasEmployeeContext = $user?->companyId() !== null
         && $user?->employee()
             ->where('company_id', $user->companyId())
@@ -106,6 +111,20 @@
             <a class="btn app-topbar-action d-none d-sm-inline-flex" href="{{ route('dashboard') }}" title="Dashboard">
                 <i class="fa-solid fa-gauge-high"></i><span class="d-none d-lg-inline">Dashboard</span>
             </a>
+
+            @if($isSuperAdmin)
+                <form class="d-flex align-items-center gap-1" method="POST" action="{{ route('company-context.update') }}">
+                    @csrf
+                    <label class="visually-hidden" for="active-company">Company workspace</label>
+                    <select class="form-select form-select-sm" id="active-company" name="company_id" aria-label="Company workspace">
+                        <option value="" disabled @selected($activeCompanyId === null)>Select company</option>
+                        @foreach($companies as $company)
+                            <option value="{{ $company->id }}" @selected($activeCompanyId === (int) $company->id)>{{ $company->name }}</option>
+                        @endforeach
+                    </select>
+                    <button class="btn btn-sm btn-primary text-nowrap" type="submit"><i class="fa-solid fa-arrow-right-to-bracket me-1"></i><span class="d-none d-xl-inline">Open</span></button>
+                </form>
+            @endif
 
             @if(count($personalItems))
                 <div class="dropdown d-none d-md-block">
