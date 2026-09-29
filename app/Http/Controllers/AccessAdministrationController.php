@@ -140,7 +140,7 @@ class AccessAdministrationController extends Controller
 
     public function roles(Request $request): View
     {
-        $this->currentCompanyId($request);
+        abort_unless($request->user()?->hasRole('Super Admin'), 403);
 
         return view('access.roles', [
             'roles' => Role::query()->with('permissions')->withCount(['users', 'permissions'])->where('guard_name', 'web')->orderBy('name')->paginate($this->perPage($request, 20))->withQueryString(),
@@ -217,7 +217,6 @@ class AccessAdministrationController extends Controller
 
     private function authorizeGlobalRoleChange(Request $request): void
     {
-        $this->currentCompanyId($request);
         abort_unless($request->user()->hasRole('Super Admin'), 403, 'Only Super Admin can change global role definitions.');
     }
 
