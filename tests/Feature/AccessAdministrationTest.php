@@ -76,6 +76,27 @@ it('revokes sessions when company-linked access changes or the user is deactivat
     expect($user->fresh()->is_active)->toBeFalse()->and(DB::table('sessions')->where('user_id', $user->id)->exists())->toBeFalse();
 });
 
+it('allows super admins to manage global roles without a selected company', function () {
+    Company::factory()->create(['name' => 'Second Company']);
+
+    $superAdmin = User::factory()->create(['email_verified_at' => now()]);
+    $superAdmin->assignRole('Super Admin');
+
+    $this->actingAs($superAdmin)
+        ->get(route('roles.index'))
+        ->assertOk();
+
+    $this->actingAs($superAdmin)
+        ->post(route('roles.store'), [
+            'name' => 'Access Test Role',
+            'permissions' => ['company.view'],
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect(Role::where('name', 'Access Test Role')->where('guard_name', 'web')->exists())->toBeTrue();
+});
+
 it('allows only super admins to mutate global role definitions', function () {
     $ownerRole = Role::findByName('Owner', 'web');
     $this->actingAs($this->owner)->put(route('roles.update', $ownerRole), ['name' => 'Changed Owner', 'permissions' => ['company.view']])->assertForbidden();
